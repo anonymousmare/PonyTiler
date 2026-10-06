@@ -172,14 +172,13 @@ aside { width: 340px; display: flex; flex-direction: column; background: var(--p
 .bg-hex { color: var(--cyan); font-size: 10px; }
 .add-pal { margin: 3px; flex: none; color: var(--muted); border-style: dashed; }
 
-/* Drag strip on a panel's bottom edge. */
-.grip {
-  flex: none; height: 5px; cursor: ns-resize; background: var(--panel-2);
-  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line-hi);
-  background-image: linear-gradient(90deg, transparent calc(50% - 12px), var(--line-hi) calc(50% - 12px), var(--line-hi) calc(50% + 12px), transparent calc(50% + 12px));
-  background-size: 100% 1px; background-repeat: no-repeat; background-position: 0 1px;
+/* Drag strip on a panel's bottom edge: invisible until hovered, then a 50% dither. */
+.grip { flex: none; height: 5px; cursor: ns-resize; position: relative; }
+/* Widens the hover zone a few pixels either side without taking layout space. */
+.grip::before { content: ''; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px; z-index: 2; }
+.grip:hover, .grip.active {
+  background: repeating-conic-gradient(var(--line-hi) 0 25%, transparent 0 50%) 0 0 / 2px 2px;
 }
-.grip:hover, .grip.active { background-color: var(--accent-2); border-bottom-color: var(--accent); }
 #assetsPanel { border-bottom: none; }
 #layers { overflow: auto; flex: 1; padding: 1px 2px; }
 .layer {
