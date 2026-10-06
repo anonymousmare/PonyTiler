@@ -176,6 +176,7 @@
       src: opts.src,
       srcTile: opts.srcTile,
       resample: opts.resample || 'auto',
+      icon: opts.icon || null,  // palette grid cell { x, y } shown in the tileset list; null = first tile
       srcImg: opts.srcImg
     };
     processTileset(t);
@@ -1033,7 +1034,19 @@
       return { x: Math.max(0, Math.min(t.palCols - 1, p.x)), y: Math.max(0, Math.min(t.palRows - 1, p.y)) };
     }
     P.canvas.addEventListener('pointerdown', function (e) {
-      if (!S.tsMap[P.tsId] || e.button !== 0) return;
+      var t = S.tsMap[P.tsId];
+      if (t && e.button === 1) {
+        // Middle-click picks the tile shown as the tileset's icon in the list.
+        e.preventDefault();
+        var h = rawPos(e);
+        if (!paletteCell(t, h.x, h.y)) return;
+        t.icon = t.icon && t.icon.x === h.x && t.icon.y === h.y ? null : { x: h.x, y: h.y };
+        renderTree();
+        renderPalettes();
+        changed(true);
+        return;
+      }
+      if (!t || e.button !== 0) return;
       P.canvas.setPointerCapture(e.pointerId);
       var p = clampPos(e);
       // Ctrl/Shift adds another rectangle to the selection (handy with the dice).
@@ -1053,6 +1066,7 @@
       var p = clampPos(e), s = P.sels[P.sels.length - 1];
       if (p.x !== s.x1 || p.y !== s.y1) { s.x1 = p.x; s.y1 = p.y; renderPalette(P); }
     });
+    P.canvas.addEventListener('mousedown', function (e) { if (e.button === 1) e.preventDefault(); });
     P.canvas.addEventListener('pointerleave', function () { if (S.palHover && S.palHover.P === P) S.palHover = null; });
     P.canvas.addEventListener('pointerup', function () {
       if (!P.drag) return;
@@ -1395,6 +1409,14 @@
       palCtx.strokeStyle = '#f2ee4a';
       palCtx.strokeRect(x0 * d + 1, y0 * d + 1, w * d - 2, h * d - 2);
     });
+    if (t.icon && paletteCell(t, t.icon.x, t.icon.y)) {
+      // Corner triangle marks the tile used as the list icon.
+      var ix = t.icon.x * d, iy = t.icon.y * d, m = Math.max(5, Math.round(d * 0.3));
+      palCtx.fillStyle = '#ff4fd8';
+      palCtx.beginPath();
+      palCtx.moveTo(ix + d - m, iy); palCtx.lineTo(ix + d, iy); palCtx.lineTo(ix + d, iy + m);
+      palCtx.fill();
+    }
     drawHotkeyLabels(P, palCtx, d);
   }
 
@@ -1643,7 +1665,8 @@
     icon.width = 16; icon.height = 16;
     var g = icon.getContext('2d');
     g.imageSmoothingEnabled = false;
-    var c = isAuto(t.type) ? (t.kinds.length ? { t: t.id, k: t.kinds[0] } : null) : firstTile(t);
+    var c = (t.icon && paletteCell(t, t.icon.x, t.icon.y)) ||
+      (isAuto(t.type) ? (t.kinds.length ? { t: t.id, k: t.kinds[0] } : null) : firstTile(t));
     if (c) drawCellTo(g, c, 0, 0, 16 / S.ts, noSame);
     var name = document.createElement('span');
     name.className = 'name'; name.textContent = t.name;
@@ -2097,7 +2120,7 @@
       stamps: S.stamps.map(function (st) { return { w: st.w, h: st.h, cells: st.cells }; }),
       folders: S.folders.map(function (f) { return { id: f.id, name: f.name, parent: f.parent, open: !!f.open }; }),
       tilesets: S.tilesets.map(function (t) {
-        return { id: t.id, name: t.name, type: t.type, folder: t.folder, src: t.src, srcTile: t.srcTile, resample: t.resample };
+        return { id: t.id, name: t.name, type: t.type, folder: t.folder, src: t.src, srcTile: t.srcTile, resample: t.resample, icon: t.icon };
       }),
       map: {
         w: S.map.w, h: S.map.h, active: S.active,

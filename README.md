@@ -37,6 +37,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 | Grid / axes / focus layer | `H` / `X` / `L` |
 | Switch layer | `[` / `]` |
 | Rename tileset or folder | Double-click it |
+| Set tileset icon | Middle-click a tile in the palette (again to reset) |
 | Undo / redo | Ctrl+Z / Ctrl+Y |
 | Save / open / export | Ctrl+S / Ctrl+O / Ctrl+E |
 
