@@ -2553,12 +2553,14 @@
   // Button hover sound
   // ---------------------------------------------------------------------------
   var hoverSound = new Audio('https://files.catbox.moe/cmoj9r.ogg');
-  hoverSound.volume = 0.3;
+  hoverSound.preload = 'auto';
   document.addEventListener('mouseover', function (e) {
     var b = e.target.closest && e.target.closest('button');
     if (!b || b.disabled || (e.relatedTarget && b.contains(e.relatedTarget))) return;
-    hoverSound.currentTime = 0;
-    var p = hoverSound.play();
+    // Play a fresh copy each time so rapid hovers overlap instead of restarting.
+    var s = hoverSound.cloneNode();
+    s.volume = 0.01;
+    var p = s.play();
     if (p && p.catch) p.catch(function () {});
   });
 
