@@ -2550,6 +2550,19 @@
   });
 
   // ---------------------------------------------------------------------------
+  // Button hover sound
+  // ---------------------------------------------------------------------------
+  var hoverSound = new Audio('https://files.catbox.moe/cmoj9r.ogg');
+  hoverSound.volume = 0.3;
+  document.addEventListener('mouseover', function (e) {
+    var b = e.target.closest && e.target.closest('button');
+    if (!b || b.disabled || (e.relatedTarget && b.contains(e.relatedTarget))) return;
+    hoverSound.currentTime = 0;
+    var p = hoverSound.play();
+    if (p && p.catch) p.catch(function () {});
+  });
+
+  // ---------------------------------------------------------------------------
   // Boot
   // ---------------------------------------------------------------------------
   resizeCanvas();
