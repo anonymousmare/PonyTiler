@@ -121,6 +121,8 @@ aside { width: 340px; display: flex; flex-direction: column; background: var(--p
 }
 .panel-head .head-btns { display: flex; gap: 1px; }
 .panel-head button, .panel-head select { padding-left: 4px; padding-right: 4px; font-size: 10px; height: 14px; }
+.icon-btn { width: 18px; padding-left: 0 !important; padding-right: 0 !important; }
+.icon-btn svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; shape-rendering: crispEdges; overflow: visible; }
 
 #assetsPanel { flex: 0 0 38%; }
 #palettePanel { flex: 1; }

@@ -690,7 +690,7 @@
         if (x % sx && x !== hx) continue;
         var cx = ox + (x + 0.5) * d;
         if (cx < x0 || cx > x1) continue;
-        ctx.fillStyle = x === hx ? '#f2ee4a' : '#3f9a55';
+        ctx.fillStyle = x === hx ? '#ff3bf0' : '#3f9a55';
         ctx.fillText(String(x), cx, ty + th / 2);
       }
     }
@@ -704,7 +704,7 @@
         if (y % sy && y !== hy) continue;
         var cy = oy + (y + 0.5) * d;
         if (cy < y0 || cy > y1) continue;
-        ctx.fillStyle = y === hy ? '#f2ee4a' : '#3f9a55';
+        ctx.fillStyle = y === hy ? '#ff3bf0' : '#3f9a55';
         ctx.fillText(String(y), lx + lw / 2, cy);
       }
     }
@@ -1499,7 +1499,7 @@
     })(null, 0);
     var root = document.createElement('div');
     root.className = 'root-drop';
-    root.textContent = S.tilesets.length || S.folders.length ? 'Drop here to move to top level' : 'No tilesets yet — click "+ Import images" or drop PNGs anywhere.';
+    root.textContent = S.tilesets.length || S.folders.length ? 'Drop here to move to top level' : 'No tilesets yet — click the image button above or drop PNGs anywhere.';
     makeDropTarget(root, null);
     tree.appendChild(root);
   }
