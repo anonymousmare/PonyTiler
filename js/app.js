@@ -1121,7 +1121,7 @@
       '<button data-action="unselect" title="Unselect brush (Esc)">✕</button>' +
       '<button class="pal-del" title="Remove this palette">Del</button></div></div>' +
       '<div class="palette-wrap"><canvas class="palette"></canvas><div class="empty">Drag a tileset here from the list on the left.</div></div>' +
-      '<div class="grip" title="Drag to resize"></div>';
+      '<div class="grip"></div>';
     var sel = sec.querySelector('select');
     PAL_ZOOMS.forEach(function (z) {
       var o = document.createElement('option');
