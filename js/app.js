@@ -28,7 +28,10 @@
     dice: false,
     zoom: 1, ox: 0, oy: 0,
     grid: true, dim: false, axes: true,
-    hover: null
+    hover: null,
+    hotkeys: {},     // letter -> { t: tileset id, x0, y0, x1, y1 } in palette grid cells
+    palHover: null,  // { P, x, y } while the pointer is over a palette
+    treeH: null      // tileset list height in px (null = default split)
   };
 
   function uid(p) { return p + (S.nextId++); }
@@ -512,12 +515,7 @@
       var c = l.cells[i], t = S.tsMap[c.t];
       if (!t) continue;
       var px = c.k !== undefined ? c.k % 8 : c.x, py = c.k !== undefined ? Math.floor(c.k / 8) : c.y;
-      var P = palettes[1].tsId === t.id ? palettes[1] : palettes[0];
-      if (P === palettes[0]) selectTileset(t.id, true);
-      palettes.forEach(function (q) { q.sels = []; });
-      P.sels = [{ x0: px, y0: py, x1: px, y1: py }];
-      S.lastPal = P;
-      buildBrushFromPalettes();
+      selectFromPalettes(t.id, { x0: px, y0: py, x1: px, y1: py });
       setTool('brush');
       flash('Picked from layer "' + l.name + '"');
       return;
@@ -556,7 +554,7 @@
     flushDirty();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#15161a';
+    ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
@@ -583,10 +581,10 @@
       var px = 1 / dpr;
       for (var x = 0; x <= S.map.w; x++) { var gx = ox + x * d; ctx.rect(gx, oy, px, mh); }
       for (var y = 0; y <= S.map.h; y++) { var gy = oy + y * d; ctx.rect(ox, gy, mw, px); }
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillStyle = 'rgba(98,214,255,0.16)';
       ctx.fill();
     }
-    ctx.strokeStyle = 'rgba(200,111,216,0.6)';
+    ctx.strokeStyle = '#f2ee4a';
     ctx.lineWidth = 1 / dpr;
     ctx.strokeRect(ox, oy, mw, mh);
 
@@ -678,13 +676,13 @@
     var ty = Math.max(0, Math.min(vh - th, oy - th)), lx = Math.max(0, Math.min(vw - lw, ox - lw));
     var hx = S.hover && S.hover.x >= 0 && S.hover.x < S.map.w ? S.hover.x : -1;
     var hy = S.hover && S.hover.y >= 0 && S.hover.y < S.map.h ? S.hover.y : -1;
-    ctx.font = '11px system-ui, sans-serif';
+    ctx.font = '10px "Lucida Console", Consolas, "DejaVu Sans Mono", monospace';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
 
     var x0 = Math.max(ox, lx + lw), x1 = Math.min(ox + mw, vw);
     if (x1 > x0) {
-      ctx.fillStyle = 'rgba(30,31,36,0.85)';
+      ctx.fillStyle = 'rgba(0,0,0,0.88)';
       ctx.fillRect(x0, ty, x1 - x0, th);
       var sx = axisStep(d, 8 + 7 * String(S.map.w - 1).length);
       var first = Math.max(0, Math.floor((x0 - ox) / d)), last = Math.min(S.map.w - 1, Math.ceil((x1 - ox) / d));
@@ -692,13 +690,13 @@
         if (x % sx && x !== hx) continue;
         var cx = ox + (x + 0.5) * d;
         if (cx < x0 || cx > x1) continue;
-        ctx.fillStyle = x === hx ? '#e9a6f5' : '#9095a3';
+        ctx.fillStyle = x === hx ? '#ff3bf0' : '#3f9a55';
         ctx.fillText(String(x), cx, ty + th / 2);
       }
     }
     var y0 = Math.max(oy, ty + th), y1 = Math.min(oy + mh, vh);
     if (y1 > y0) {
-      ctx.fillStyle = 'rgba(30,31,36,0.85)';
+      ctx.fillStyle = 'rgba(0,0,0,0.88)';
       ctx.fillRect(lx, y0, lw, y1 - y0);
       var sy = axisStep(d, 14);
       var firstY = Math.max(0, Math.floor((y0 - oy) / d)), lastY = Math.min(S.map.h - 1, Math.ceil((y1 - oy) / d));
@@ -706,11 +704,11 @@
         if (y % sy && y !== hy) continue;
         var cy = oy + (y + 0.5) * d;
         if (cy < y0 || cy > y1) continue;
-        ctx.fillStyle = y === hy ? '#e9a6f5' : '#9095a3';
+        ctx.fillStyle = y === hy ? '#ff3bf0' : '#3f9a55';
         ctx.fillText(String(y), lx + lw / 2, cy);
       }
     }
-    ctx.fillStyle = 'rgba(30,31,36,0.95)';
+    ctx.fillStyle = '#000';
     ctx.fillRect(lx, ty, lw, th);
   }
 
@@ -718,8 +716,8 @@
   function checkerPattern() {
     if (!checker) {
       var c = makeCanvas(16, 16), g = c.getContext('2d');
-      g.fillStyle = '#2b2d35'; g.fillRect(0, 0, 16, 16);
-      g.fillStyle = '#25272e'; g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8);
+      g.fillStyle = '#0b100d'; g.fillRect(0, 0, 16, 16);
+      g.fillStyle = '#060906'; g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8);
       checker = ctx.createPattern(c, 'repeat');
     }
     return checker;
@@ -1016,20 +1014,23 @@
   // ---------------------------------------------------------------------------
   // Palette
   // ---------------------------------------------------------------------------
-  // Two palettes: the left one follows the tileset list, the right one takes whatever is dropped on it.
-  function makePalette(ids) {
+  // The main palette (left) follows the tileset list; extra palettes (right) take whatever is dropped on them
+  // and can be added, renamed, resized and removed.
+  var palSeq = 0;
+  function makePalette(els, opts) {
     var P = {
-      tsId: null, sels: [], drag: false,
-      canvas: $(ids.canvas), wrap: $(ids.wrap), zoomSel: $(ids.zoom), title: $(ids.title), emptyEl: $(ids.empty), label: ids.label
+      id: 'p' + (++palSeq), tsId: null, sels: [], drag: false, main: !!opts.main, name: opts.name, height: opts.height || null,
+      section: els.section, canvas: els.canvas, wrap: els.wrap, zoomSel: els.zoomSel, title: els.title, emptyEl: els.emptyEl
     };
     P.ctx = P.canvas.getContext('2d');
 
+    function rawPos(e) {
+      var r = P.canvas.getBoundingClientRect(), d = S.ts * palZoom(P);
+      return { x: Math.floor((e.clientX - r.left) / d), y: Math.floor((e.clientY - r.top) / d) };
+    }
     function clampPos(e) {
-      var t = S.tsMap[P.tsId], r = P.canvas.getBoundingClientRect(), d = S.ts * palZoom(P);
-      return {
-        x: Math.max(0, Math.min(t.palCols - 1, Math.floor((e.clientX - r.left) / d))),
-        y: Math.max(0, Math.min(t.palRows - 1, Math.floor((e.clientY - r.top) / d)))
-      };
+      var t = S.tsMap[P.tsId], p = rawPos(e);
+      return { x: Math.max(0, Math.min(t.palCols - 1, p.x)), y: Math.max(0, Math.min(t.palRows - 1, p.y)) };
     }
     P.canvas.addEventListener('pointerdown', function (e) {
       if (!S.tsMap[P.tsId] || e.button !== 0) return;
@@ -1043,18 +1044,25 @@
       renderPalette(P);
     });
     P.canvas.addEventListener('pointermove', function (e) {
+      var t = S.tsMap[P.tsId];
+      if (t) {
+        var h = rawPos(e);
+        S.palHover = h.x >= 0 && h.y >= 0 && h.x < t.palCols && h.y < t.palRows ? { P: P, x: h.x, y: h.y } : null;
+      }
       if (!P.drag) return;
       var p = clampPos(e), s = P.sels[P.sels.length - 1];
       if (p.x !== s.x1 || p.y !== s.y1) { s.x1 = p.x; s.y1 = p.y; renderPalette(P); }
     });
+    P.canvas.addEventListener('pointerleave', function () { if (S.palHover && S.palHover.P === P) S.palHover = null; });
     P.canvas.addEventListener('pointerup', function () {
       if (!P.drag) return;
       P.drag = false;
       buildBrushFromPalettes();
       if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
     });
-    P.zoomSel.addEventListener('change', function () { renderPalette(P); });
-    new ResizeObserver(function () { if (P.zoomSel.value === 'fit') renderPalette(P); }).observe(P.wrap);
+    P.zoomSel.addEventListener('change', function () { renderPalette(P); if (!P.main) changed(true); });
+    P.ro = new ResizeObserver(function () { if (P.zoomSel.value === 'fit') renderPalette(P); });
+    P.ro.observe(P.wrap);
 
     // Tilesets can be dragged from the list straight onto a palette.
     P.wrap.addEventListener('dragover', function (e) {
@@ -1071,7 +1079,7 @@
       e.stopPropagation();
       var parts = data.split(':');
       if (parts[0] !== 'ts') return flash('Drop a tileset, not a folder');
-      if (P === palettes[0]) selectTileset(parts[1]);
+      if (P.main) selectTileset(parts[1]);
       else showInPalette(P, parts[1]);
       changed(true);
     });
@@ -1079,9 +1087,268 @@
   }
 
   var palettes = [
-    makePalette({ canvas: 'palette', wrap: 'paletteWrap', zoom: 'paletteZoom', title: 'paletteTitle', empty: 'paletteEmpty', label: 'Palette' }),
-    makePalette({ canvas: 'palette2', wrap: 'paletteWrap2', zoom: 'paletteZoom2', title: 'paletteTitle2', empty: 'paletteEmpty2', label: 'Palette 2' })
+    makePalette({
+      section: $('palettePanel'), canvas: $('palette'), wrap: $('paletteWrap'), zoomSel: $('paletteZoom'),
+      title: $('paletteTitle'), emptyEl: $('paletteEmpty')
+    }, { main: true, name: 'Palette' })
   ];
+
+  var PAL_ZOOMS = [['fit', 'Fit'], ['1', '1×'], ['1.5', '1.5×'], ['2', '2×'], ['3', '3×']];
+  var MIN_PAL_H = 70;
+
+  function addPalette(opts) {
+    opts = opts || {};
+    var sec = document.createElement('section');
+    sec.className = 'panel xpal';
+    sec.innerHTML =
+      '<div class="panel-head"><span class="pal-title" title="Double-click to rename"></span><div class="head-btns">' +
+      '<button class="pal-bg" title="Background colour behind transparent tiles"></button>' +
+      '<select title="Palette zoom"></select>' +
+      '<button data-action="unselect" title="Unselect brush (Esc)">✕</button>' +
+      '<button class="pal-del" title="Remove this palette">Del</button></div></div>' +
+      '<div class="palette-wrap"><canvas class="palette"></canvas><div class="empty">Drag a tileset here from the list on the left.</div></div>' +
+      '<div class="grip" title="Drag to resize"></div>';
+    var sel = sec.querySelector('select');
+    PAL_ZOOMS.forEach(function (z) {
+      var o = document.createElement('option');
+      o.value = z[0]; o.textContent = z[1];
+      sel.appendChild(o);
+    });
+    sel.value = opts.zoom || '1';
+    $('palStack').appendChild(sec);
+    var P = makePalette({
+      section: sec, canvas: sec.querySelector('canvas'), wrap: sec.querySelector('.palette-wrap'), zoomSel: sel,
+      title: sec.querySelector('.pal-title'), emptyEl: sec.querySelector('.empty')
+    }, { name: opts.name || nextPaletteName(), height: opts.height || 260 });
+    P.tsId = opts.ts && S.tsMap[opts.ts] ? opts.ts : null;
+    P.bg = opts.bg || null;
+    P.bgBtn = sec.querySelector('.pal-bg');
+    P.bgBtn.addEventListener('click', function (e) { e.stopPropagation(); openBgPicker(P); });
+    syncBgButton(P);
+    sec.style.flexBasis = P.height + 'px';
+    P.title.addEventListener('dblclick', function () {
+      promptText('Rename palette', P.name).then(function (n) { if (n) { P.name = n; renderPalette(P); changed(true); } });
+    });
+    sec.querySelector('.pal-del').addEventListener('click', function () { removePalette(P); });
+    makeGrip(sec.querySelector('.grip'), function () { return sec.getBoundingClientRect().height; }, function (h) {
+      P.height = Math.max(MIN_PAL_H, Math.round(h));
+      sec.style.flexBasis = P.height + 'px';
+    });
+    palettes.push(P);
+    renderPalette(P);
+    return P;
+  }
+
+  function nextPaletteName() {
+    for (var n = 2; ; n++) {
+      var name = 'Palette ' + n;
+      if (!palettes.some(function (P) { return P.name === name; })) return name;
+    }
+  }
+
+  function removePalette(P) {
+    if (bgPick && bgPick.P === P) closeBgPicker();
+    if (P.sels.length && S.brush && !S.brush.stampId) setBrush(null);
+    P.ro.disconnect();
+    P.section.remove();
+    palettes = palettes.filter(function (q) { return q !== P; });
+    if (S.lastPal === P) S.lastPal = null;
+    if (S.palHover && S.palHover.P === P) S.palHover = null;
+    changed(true);
+  }
+
+  function setExtraPalettes(list) {
+    palettes.slice(1).forEach(function (P) { P.ro.disconnect(); P.section.remove(); });
+    palettes = palettes.slice(0, 1);
+    list.forEach(addPalette);
+  }
+
+  // Palette background picker: hue runs left to right, brightness bottom to top. Saturation is fixed to
+  // that of the app's own background colour, so every choice stays in the same family.
+  function hsvToHex(h, s, v) {
+    var f = function (n) {
+      var k = (n + h / 60) % 6, c = v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+      return ('0' + Math.round(c * 255).toString(16)).slice(-2);
+    };
+    return '#' + f(5) + f(3) + f(1);
+  }
+  function hexToHsv(hex) {
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
+    if (!m) return { h: 0, s: 0, v: 0 };
+    var r = parseInt(m[1], 16) / 255, g = parseInt(m[2], 16) / 255, b = parseInt(m[3], 16) / 255;
+    var max = Math.max(r, g, b), d = max - Math.min(r, g, b), h = 0;
+    if (d) h = 60 * (max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4);
+    return { h: h, s: max ? d / max : 0, v: max };
+  }
+  function bgSaturation() { return hexToHsv(getComputedStyle(document.documentElement).getPropertyValue('--panel-2')).s; }
+
+  function syncBgButton(P) {
+    P.bgBtn.style.background = P.bg || 'transparent';
+    P.bgBtn.classList.toggle('set', !!P.bg);
+  }
+
+  var bgPick = null;
+  function openBgPicker(P) {
+    if (bgPick && bgPick.P === P) return closeBgPicker();
+    closeBgPicker();
+    var W = 180, H = 90, sat = bgSaturation();
+    var pop = document.createElement('div');
+    pop.className = 'bg-pop';
+    pop.innerHTML = '<canvas width="' + W + '" height="' + H + '"></canvas>' +
+      '<div class="bg-pop-row"><span class="bg-hex"></span><button type="button" class="bg-none">None</button></div>';
+    var pad = pop.querySelector('canvas'), g = pad.getContext('2d'), hexEl = pop.querySelector('.bg-hex');
+    function draw() {
+      for (var x = 0; x < W; x++) for (var y = 0; y < H; y++) {
+        g.fillStyle = hsvToHex(x / W * 360, sat, 1 - y / (H - 1));
+        g.fillRect(x, y, 1, 1);
+      }
+      hexEl.textContent = P.bg ? P.bg.toUpperCase() : 'NONE';
+      if (!P.bg) return;
+      var c = hexToHsv(P.bg), mx = Math.round(c.h / 360 * W) + 0.5, my = Math.round((1 - c.v) * (H - 1)) + 0.5;
+      g.strokeStyle = c.v > 0.5 ? '#000' : '#fff';
+      g.strokeRect(mx - 3, my - 3, 6, 6);
+    }
+    function setFrom(e) {
+      var r = pad.getBoundingClientRect();
+      var x = Math.max(0, Math.min(W - 1, (e.clientX - r.left) * W / r.width));
+      var y = Math.max(0, Math.min(H - 1, (e.clientY - r.top) * H / r.height));
+      P.bg = hsvToHex(x / W * 360, sat, 1 - y / (H - 1));
+      syncBgButton(P); renderPalette(P); draw();
+    }
+    var dragging = false;
+    pad.addEventListener('pointerdown', function (e) { pad.setPointerCapture(e.pointerId); dragging = true; setFrom(e); });
+    pad.addEventListener('pointermove', function (e) { if (dragging) setFrom(e); });
+    pad.addEventListener('pointerup', function () { if (dragging) { dragging = false; changed(true); } });
+    pop.querySelector('.bg-none').addEventListener('click', function () {
+      P.bg = null; syncBgButton(P); renderPalette(P); changed(true); closeBgPicker();
+    });
+    document.body.appendChild(pop);
+    var r = P.bgBtn.getBoundingClientRect();
+    pop.style.left = Math.max(4, Math.min(r.left, window.innerWidth - pop.offsetWidth - 4)) + 'px';
+    pop.style.top = Math.min(r.bottom + 3, window.innerHeight - pop.offsetHeight - 4) + 'px';
+    bgPick = { P: P, el: pop };
+    draw();
+  }
+  function closeBgPicker() { if (bgPick) { bgPick.el.remove(); bgPick = null; } }
+  document.addEventListener('mousedown', function (e) {
+    if (bgPick && !bgPick.el.contains(e.target) && e.target !== bgPick.P.bgBtn) closeBgPicker();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeBgPicker(); });
+
+  // Bottom-edge drag handle; getH reads the current height, setH applies a new one.
+  function makeGrip(grip, getH, setH) {
+    var y0 = 0, h0 = 0, active = false;
+    grip.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      grip.setPointerCapture(e.pointerId);
+      active = true; y0 = e.clientY; h0 = getH();
+      grip.classList.add('active');
+    });
+    grip.addEventListener('pointermove', function (e) { if (active) setH(h0 + e.clientY - y0); });
+    function end() { if (!active) return; active = false; grip.classList.remove('active'); changed(true); }
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+  }
+
+  function applyTreeH() {
+    $('assetsPanel').style.flexBasis = S.treeH ? S.treeH + 'px' : '';
+  }
+  makeGrip($('treeGrip'), function () { return $('assetsPanel').getBoundingClientRect().height; }, function (h) {
+    var max = $('left').clientHeight - MIN_PAL_H;
+    S.treeH = Math.round(Math.max(60, Math.min(max, h)));
+    applyTreeH();
+  });
+
+  // Shows a tileset rectangle as the brush, reusing a palette that already shows that tileset.
+  function selectFromPalettes(tsId, rect) {
+    var P = palettes.find(function (q) { return !q.main && q.tsId === tsId; }) || palettes[0];
+    if (P.main) selectTileset(tsId, true);
+    palettes.forEach(function (q) { q.sels = []; });
+    P.sels = [Object.assign({}, rect)];
+    S.lastPal = P;
+    buildBrushFromPalettes();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hotkeys: Ctrl+letter over a palette tile binds it, Ctrl+letter anywhere else selects it again
+  // ---------------------------------------------------------------------------
+  // Letters the app or the browser already uses with Ctrl.
+  var RESERVED_KEYS = { c: 'copy stamp', e: 'export', n: 'new window', o: 'open', s: 'save', t: 'new tab', w: 'close tab', y: 'redo', z: 'undo' };
+  var HOTKEY_COLORS = ['#ff3b3b', '#3bff5a', '#4d86ff', '#3bf5ff', '#fff23b', '#ff3bf0', '#ffffff'];
+
+  function hotkeyColor(k) { return HOTKEY_COLORS[(k.charCodeAt(0) - 97) % HOTKEY_COLORS.length]; }
+
+  function bindHotkey(k) {
+    var h = S.palHover, P = h.P, t = S.tsMap[P.tsId];
+    if (!t) return;
+    // Over a selected rectangle the whole rectangle is bound, otherwise just the tile under the pointer.
+    var sel = P.sels.slice().reverse().find(function (s) {
+      return h.x >= Math.min(s.x0, s.x1) && h.x <= Math.max(s.x0, s.x1) && h.y >= Math.min(s.y0, s.y1) && h.y <= Math.max(s.y0, s.y1);
+    });
+    var r = sel ? {
+      x0: Math.min(sel.x0, sel.x1), y0: Math.min(sel.y0, sel.y1), x1: Math.max(sel.x0, sel.x1), y1: Math.max(sel.y0, sel.y1)
+    } : { x0: h.x, y0: h.y, x1: h.x, y1: h.y };
+    if (!rectCells(t, r).cells.some(Boolean)) return flash('Nothing to bind there — that tile is empty');
+    var old = S.hotkeys[k];
+    if (old && old.t === t.id && old.x0 === r.x0 && old.y0 === r.y0 && old.x1 === r.x1 && old.y1 === r.y1) {
+      delete S.hotkeys[k];
+      flash('Ctrl+' + k.toUpperCase() + ' unbound');
+    } else {
+      S.hotkeys[k] = { t: t.id, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 };
+      var size = r.x1 - r.x0 + 1 + '×' + (r.y1 - r.y0 + 1);
+      flash('Ctrl+' + k.toUpperCase() + ' → ' + t.name + ' ' + size + (old ? ' (replaced the old binding)' : ''));
+    }
+    renderPalettes();
+    syncHotkeyButton();
+    changed(true);
+  }
+
+  function useHotkey(k) {
+    var hk = S.hotkeys[k];
+    if (!S.tsMap[hk.t]) return;
+    selectFromPalettes(hk.t, hk);
+    if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
+  }
+
+  function clearHotkeys() {
+    if (!Object.keys(S.hotkeys).length) return;
+    if (!confirm('Clear all ' + Object.keys(S.hotkeys).length + ' hotkeys?')) return;
+    S.hotkeys = {};
+    renderPalettes();
+    syncHotkeyButton();
+    changed(true);
+    flash('Hotkeys cleared');
+  }
+
+  function syncHotkeyButton() { $('btnClearKeys').disabled = !Object.keys(S.hotkeys).length; }
+
+  // Letters in the bottom-right corner of each bound rectangle, outlined in black.
+  function drawHotkeyLabels(P, g, d) {
+    var at = {};
+    Object.keys(S.hotkeys).sort().forEach(function (k) {
+      var hk = S.hotkeys[k];
+      if (hk.t !== P.tsId) return;
+      var key = hk.x1 + ',' + hk.y1;
+      (at[key] = at[key] || { x: hk.x1, y: hk.y1, keys: [] }).keys.push(k);
+    });
+    var fs = Math.round(Math.max(8, Math.min(13, d * 0.38)));
+    g.font = 'bold ' + fs + 'px "Lucida Console", Consolas, "DejaVu Sans Mono", monospace';
+    g.textAlign = 'right';
+    g.textBaseline = 'alphabetic';
+    g.lineJoin = 'round';
+    g.lineWidth = 3;
+    g.strokeStyle = '#000';
+    Object.keys(at).forEach(function (key) {
+      var a = at[key], x = (a.x + 1) * d - 2, y = (a.y + 1) * d - 2;
+      a.keys.slice().reverse().forEach(function (k) {
+        var ch = k.toUpperCase();
+        g.strokeText(ch, x, y);
+        g.fillStyle = hotkeyColor(k);
+        g.fillText(ch, x, y);
+        x -= g.measureText(ch).width + 1;
+      });
+    });
+  }
 
   function showInPalette(P, id) {
     if (P.tsId !== id) P.sels = [];
@@ -1101,13 +1368,13 @@
     var t = S.tsMap[P.tsId], pal = P.canvas, palCtx = P.ctx;
     P.emptyEl.hidden = !!t;
     pal.hidden = !t;
-    P.title.textContent = t ? P.label + ' — ' + t.name : P.label;
+    P.title.textContent = t ? P.name + ' — ' + t.name : P.name;
     if (!t) return;
     var z = palZoom(P), ts = S.ts, d = ts * z;
     pal.width = Math.max(1, Math.round(t.palCols * d));
     pal.height = Math.max(1, Math.round(t.palRows * d));
     palCtx.imageSmoothingEnabled = false;
-    palCtx.fillStyle = '#202127';
+    palCtx.fillStyle = P.bg || '#000';
     palCtx.fillRect(0, 0, pal.width, pal.height);
     if (isAuto(t.type)) {
       t.kinds.forEach(function (k) {
@@ -1116,18 +1383,19 @@
     } else {
       palCtx.drawImage(t.img, 0, 0, t.cols * ts, t.rows * ts, 0, 0, t.cols * d, t.rows * d);
     }
-    palCtx.fillStyle = 'rgba(255,255,255,0.08)';
+    palCtx.fillStyle = 'rgba(98,214,255,0.14)';
     for (var x = 1; x < t.palCols; x++) palCtx.fillRect(Math.round(x * d), 0, 1, pal.height);
     for (var y = 1; y < t.palRows; y++) palCtx.fillRect(0, Math.round(y * d), pal.width, 1);
     P.sels.forEach(function (s) {
       var x0 = Math.min(s.x0, s.x1), y0 = Math.min(s.y0, s.y1);
       var w = Math.abs(s.x1 - s.x0) + 1, h = Math.abs(s.y1 - s.y0) + 1;
-      palCtx.fillStyle = 'rgba(200,111,216,0.25)';
+      palCtx.fillStyle = 'rgba(242,238,74,0.18)';
       palCtx.fillRect(x0 * d, y0 * d, w * d, h * d);
       palCtx.lineWidth = 2;
-      palCtx.strokeStyle = '#e9a6f5';
+      palCtx.strokeStyle = '#f2ee4a';
       palCtx.strokeRect(x0 * d + 1, y0 * d + 1, w * d - 2, h * d - 2);
     });
+    drawHotkeyLabels(P, palCtx, d);
   }
 
   // ---------------------------------------------------------------------------
@@ -1160,7 +1428,7 @@
       });
     });
     var b = last ? makeBrush(last.w, last.h, last.cells, n > 1 ? n + ' selections' : lastT.name, lastT.type, pool) : null;
-    if (b) b.src = palettes.map(function (P) { return { ts: P.tsId, sels: P.sels.map(function (s) { return Object.assign({}, s); }) }; });
+    if (b) b.src = palettes.map(function (P) { return { pid: P.id, ts: P.tsId, sels: P.sels.map(function (s) { return Object.assign({}, s); }) }; });
     setBrush(b);
   }
 
@@ -1169,8 +1437,8 @@
     if (S.brush && S.brush !== b && !S.brush.stampId) S.prevBrush = S.brush;
     S.brush = b;
     // Restore the palette highlight that belongs to this brush (stamps and "none" clear it).
-    palettes.forEach(function (P, i) {
-      var src = b && b.src && b.src[i];
+    palettes.forEach(function (P) {
+      var src = b && b.src && b.src.find(function (x) { return x.pid === P.id; });
       P.sels = src && src.ts === P.tsId ? src.sels.map(function (s) { return Object.assign({}, s); }) : [];
     });
     renderPalettes();
@@ -1190,7 +1458,7 @@
     var b = S.brush;
     $('statusBrush').textContent = !b ? 'No brush' :
       'Brush: ' + (b.stampId ? 'stamp ' : '') + b.w + '×' + b.h + ' · ' + b.name + (isAuto(b.type) ? ' (autotile)' : '') +
-      (S.dice ? ' · 🎲 ' + b.pool.length + ' tiles' : '');
+      (S.dice ? ' · RND ' + b.pool.length + ' tiles' : '');
   }
 
   function captureStamp(r) {
@@ -1309,7 +1577,7 @@
     })(null, 0);
     var root = document.createElement('div');
     root.className = 'root-drop';
-    root.textContent = S.tilesets.length || S.folders.length ? 'Drop here to move to top level' : 'No tilesets yet — click "+ Import images" or drop PNGs anywhere.';
+    root.textContent = S.tilesets.length || S.folders.length ? 'Drop here to move to top level' : 'No tilesets yet — click the image button above or drop PNGs anywhere.';
     makeDropTarget(root, null);
     tree.appendChild(root);
   }
@@ -1342,7 +1610,7 @@
 
   function folderNode(f, depth) {
     var n = nodeBase(depth, 'folder', f.id);
-    n.innerHTML = '<span class="caret">' + (f.open ? '▾' : '▸') + '</span><span class="icon">📁</span>';
+    n.innerHTML = '<span class="caret">' + (f.open ? '▾' : '▸') + '</span><span class="icon">▤</span>';
     var name = document.createElement('span');
     name.className = 'name'; name.textContent = f.name;
     var tag = document.createElement('span');
@@ -1352,7 +1620,7 @@
     acts.append(
       actBtn('+', 'New subfolder', function () { createFolder(f.id); }),
       actBtn('✎', 'Rename', function () { renameFolder(f); }),
-      actBtn('🗑', 'Delete folder (contents move up)', function () { deleteFolder(f); })
+      actBtn('×', 'Delete folder (contents move up)', function () { deleteFolder(f); })
     );
     n.append(name, tag, acts);
     n.addEventListener('click', function (e) {
@@ -1385,7 +1653,7 @@
     acts.className = 'acts';
     acts.append(
       actBtn('⚙', 'Settings', function () { editTileset(t); }),
-      actBtn('🗑', 'Delete tileset', function () { deleteTileset(t); })
+      actBtn('×', 'Delete tileset', function () { deleteTileset(t); })
     );
     n.dataset.ts = t.id;
     n.append(icon, name, tag, acts);
@@ -1422,6 +1690,12 @@
   function hideContextMenu() { $('ctxMenu').hidden = true; }
 
   document.addEventListener('mousedown', function (e) { if (!$('ctxMenu').contains(e.target)) hideContextMenu(); });
+  document.addEventListener('mousedown', function (e) {
+    document.querySelectorAll('details.menu[open]').forEach(function (d) { if (!d.contains(e.target)) d.open = false; });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(function (d) { d.open = false; });
+  });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideContextMenu(); });
   window.addEventListener('blur', hideContextMenu);
   window.addEventListener('resize', hideContextMenu);
@@ -1548,6 +1822,8 @@
       for (var i = 0; i < l.cells.length; i++) if (l.cells[i] && l.cells[i].t === t.id) { l.cells[i] = null; l.dirty.add(i); }
     });
     palettes.forEach(function (P) { if (P.tsId === t.id) showInPalette(P, null); });
+    Object.keys(S.hotkeys).forEach(function (k) { if (S.hotkeys[k].t === t.id) delete S.hotkeys[k]; });
+    syncHotkeyButton();
     if (brushUses(S.prevBrush, t.id)) S.prevBrush = null;
     if (brushUses(S.brush, t.id)) { S.brush = null; renderBrushInfo(); }
     S.stamps = S.stamps.filter(function (st) {
@@ -1702,18 +1978,19 @@
     row.className = 'layer' + (i === S.active ? ' active' : '');
     var eye = document.createElement('button');
     eye.className = 'tog' + (l.visible ? '' : ' off');
-    eye.textContent = '👁'; eye.title = 'Show/hide';
+    eye.textContent = 'V'; eye.title = 'Show/hide';
     eye.addEventListener('click', function (e) { e.stopPropagation(); l.visible = !l.visible; renderLayers(); requestRender(); changed(); });
     var lock = document.createElement('button');
     lock.className = 'tog' + (l.locked ? '' : ' off');
-    lock.textContent = '🔒'; lock.title = 'Lock/unlock';
+    lock.textContent = 'L'; lock.title = 'Lock/unlock';
     lock.addEventListener('click', function (e) { e.stopPropagation(); l.locked = !l.locked; renderLayers(); changed(); });
     var name = document.createElement('span');
     name.className = 'name'; name.textContent = l.name;
     row.append(eye, lock, name);
-    row.addEventListener('click', function () { S.active = i; renderLayers(); requestRender(); });
-    row.addEventListener('dblclick', function () {
-      promptText('Rename layer', l.name).then(function (n) { if (n) { l.name = n; renderLayers(); changed(); } });
+    row.addEventListener('click', function (e) {
+      S.active = i; renderLayers(); requestRender();
+      // The rows are rebuilt on every click, so a double-click is caught here instead of via 'dblclick'.
+      if (e.detail === 2) promptText('Rename layer', l.name).then(function (n) { if (n) { l.name = n; renderLayers(); changed(); } });
     });
     // drag to reorder
     row.draggable = true;
@@ -1812,7 +2089,11 @@
     return {
       app: 'PonyTiler', version: 1,
       tileSize: S.ts, nextId: S.nextId,
-      palette2: palettes[1].tsId,
+      palettes: palettes.filter(function (P) { return !P.main; }).map(function (P) {
+        return { name: P.name, ts: P.tsId, height: P.height, zoom: P.zoomSel.value, bg: P.bg };
+      }),
+      hotkeys: S.hotkeys,
+      treeH: S.treeH,
       stamps: S.stamps.map(function (st) { return { w: st.w, h: st.h, cells: st.cells }; }),
       folders: S.folders.map(function (f) { return { id: f.id, name: f.name, parent: f.parent, open: !!f.open }; }),
       tilesets: S.tilesets.map(function (t) {
@@ -1863,7 +2144,12 @@
       var walls = typeof p.map.walls === 'string' && p.map.walls.length === S.map.w * S.map.h ? p.map.walls : '';
       S.walls = newWallLayer(Array.prototype.map.call(walls || '0'.repeat(S.map.w * S.map.h), function (ch) { return ch === '1' ? 1 : null; }));
       resetSelection();
-      palettes[1].tsId = p.palette2 && S.tsMap[p.palette2] ? p.palette2 : null;
+      // Older files only knew a single second palette.
+      setExtraPalettes(p.palettes || [{ name: 'Palette 2', ts: p.palette2 }]);
+      S.hotkeys = {};
+      Object.keys(p.hotkeys || {}).forEach(function (k) { if (S.tsMap[p.hotkeys[k].t]) S.hotkeys[k] = p.hotkeys[k]; });
+      S.treeH = p.treeH || null;
+      applyTreeH();
       clearHistory();
       rebuildAllCanvases();
       renderAll();
@@ -1881,7 +2167,7 @@
     S.map.layers = [newLayer('Ground'), newLayer('Objects')];
     S.walls = newWallLayer();
     S.active = 0;
-    if (!old) S.stamps = [];
+    if (!old) { S.stamps = []; S.hotkeys = {}; }
     resetSelection();
     clearHistory();
     rebuildAllCanvases();
@@ -1896,7 +2182,7 @@
   }
 
   function renderAll() {
-    renderTree(); renderPalettes(); renderLayers(); renderBrushInfo(); renderStamps(); updateStatus(); syncToolButtons();
+    renderTree(); renderPalettes(); renderLayers(); renderBrushInfo(); renderStamps(); updateStatus(); syncToolButtons(); syncHotkeyButton();
   }
 
   function updateStatus() {
@@ -2170,6 +2456,8 @@
     export: function () { exportDialog('map'); },
     exportWalls: function () { exportDialog('walls'); },
     newFolder: function () { createFolder(); },
+    addPalette: function () { addPalette(); changed(true); },
+    clearKeys: clearHotkeys,
     addLayer: addLayer, addAccessoryLayer: addAccessoryLayer, dupLayer: dupLayer, delLayer: delLayer,
     layerUp: function () { moveLayer(1); },
     layerDown: function () { moveLayer(-1); }
@@ -2178,6 +2466,7 @@
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-action],[data-tool]');
     if (!b || b.closest('dialog')) return;
+    if (b.closest('.menu')) b.closest('.menu').open = false;
     if (b.dataset.tool) setTool(b.dataset.tool);
     else if (actions[b.dataset.action]) actions[b.dataset.action]();
   });
@@ -2190,6 +2479,14 @@
     var tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     var mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (mod && !e.altKey && /^[a-z]$/.test(k)) {
+      if (S.palHover && S.tsMap[S.palHover.P.tsId]) {
+        e.preventDefault();
+        if (RESERVED_KEYS[k]) return flash('Ctrl+' + k.toUpperCase() + ' is taken (' + RESERVED_KEYS[k] + ') — pick another letter');
+        return bindHotkey(k);
+      }
+      if (S.hotkeys[k] && !RESERVED_KEYS[k]) { e.preventDefault(); return useHotkey(k); }
+    }
     if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
     if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
     if (mod && k === 's') { e.preventDefault(); saveProject(); return; }
@@ -2233,6 +2530,7 @@
   // Boot
   // ---------------------------------------------------------------------------
   resizeCanvas();
+  addPalette({ name: 'Palette 2' });
   Store.get('autosave').then(function (p) {
     if (p) return loadProject(p).then(function () { flash('Restored your last session'); });
     newProject(40, 30, 32, false);
