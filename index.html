@@ -10,12 +10,14 @@
 <header id="toolbar">
   <div class="brand">PonyTiler</div>
   <div class="group">
-    <button data-action="new" title="New project">New</button>
-    <button data-action="open" title="Open project (Ctrl+O)">Open</button>
-    <button data-action="save" title="Save project (Ctrl+S)">Save</button>
-  </div>
-  <div class="group">
-    <button data-action="import" class="accent" title="Import tileset images">+ Import images</button>
+    <details class="menu" id="fileMenu">
+      <summary title="Project file">File ▾</summary>
+      <div class="menu-pop">
+        <button data-action="new" title="New project">New…</button>
+        <button data-action="open" title="Open project (Ctrl+O)">Open… <kbd>Ctrl+O</kbd></button>
+        <button data-action="save" title="Save project (Ctrl+S)">Save <kbd>Ctrl+S</kbd></button>
+      </div>
+    </details>
   </div>
   <div class="group tools">
     <button data-tool="brush" title="Brush (W)">✎ Brush</button>
@@ -35,9 +37,6 @@
     <button data-action="grid" id="btnGrid" title="Toggle grid (H)">Grid</button>
     <button data-action="axes" id="btnAxes" title="Toggle x / y axis labels (X)">Axes</button>
     <button data-action="dim" id="btnDim" title="Dim layers other than the active one (L)">Focus layer</button>
-    <button data-action="zoomOut" title="Zoom out (-)">−</button>
-    <span id="zoomLabel">100%</span>
-    <button data-action="zoomIn" title="Zoom in (+)">+</button>
   </div>
   <div class="group">
     <button data-action="resize" title="Resize map">Map size…</button>
@@ -55,6 +54,7 @@
         <span>Tilesets</span>
         <div class="head-btns">
           <button data-action="newFolder" title="New folder">+ Folder</button>
+          <button data-action="import" class="accent" title="Import tileset images">+ Import images</button>
         </div>
       </div>
       <input id="assetSearch" type="search" placeholder="Filter…">
@@ -80,6 +80,11 @@
 
   <section id="center">
     <div id="viewport"><canvas id="mapCanvas"></canvas></div>
+    <div id="zoomBox">
+      <button data-action="zoomOut" title="Zoom out (-)">−</button>
+      <span id="zoomLabel">100%</span>
+      <button data-action="zoomIn" title="Zoom in (+)">+</button>
+    </div>
   </section>
 
   <aside id="right">

@@ -1422,6 +1422,12 @@
   function hideContextMenu() { $('ctxMenu').hidden = true; }
 
   document.addEventListener('mousedown', function (e) { if (!$('ctxMenu').contains(e.target)) hideContextMenu(); });
+  document.addEventListener('mousedown', function (e) {
+    document.querySelectorAll('details.menu[open]').forEach(function (d) { if (!d.contains(e.target)) d.open = false; });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(function (d) { d.open = false; });
+  });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideContextMenu(); });
   window.addEventListener('blur', hideContextMenu);
   window.addEventListener('resize', hideContextMenu);
@@ -2178,6 +2184,7 @@
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-action],[data-tool]');
     if (!b || b.closest('dialog')) return;
+    if (b.closest('.menu')) b.closest('.menu').open = false;
     if (b.dataset.tool) setTool(b.dataset.tool);
     else if (actions[b.dataset.action]) actions[b.dataset.action]();
   });
