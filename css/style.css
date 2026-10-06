@@ -100,15 +100,6 @@ aside { width: 340px; display: flex; flex-direction: column; background: var(--p
 
 #layersPanel { flex: 0 1 auto; max-height: 32%; }
 #palette2Panel { flex: 1; }
-#stampsPanel { flex: 0 0 auto; }
-#stamps { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 8px; max-height: 150px; overflow: auto; }
-#stamps .stamp { position: relative; width: 52px; height: 52px; border: 1px solid var(--line); border-radius: 3px; background: #15161a; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-#stamps .stamp:hover { border-color: var(--accent-2); }
-#stamps .stamp.active { border-color: var(--accent); background: var(--sel); }
-#stamps .stamp canvas { image-rendering: pixelated; }
-#stamps .stamp button { position: absolute; top: -1px; right: -1px; padding: 0 3px; font-size: 10px; line-height: 13px; display: none; }
-#stamps .stamp:hover button { display: block; }
-#stamps .empty { padding: 4px 0; font-size: 12px; text-align: left; }
 #layers { overflow: auto; flex: 1; padding: 0 4px; }
 .layer {
   display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 3px; cursor: pointer;
