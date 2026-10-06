@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PonyTiler</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="toolbar">
+  <div class="brand">PonyTiler</div>
+  <div class="group">
+    <button data-action="new" title="New project">New</button>
+    <button data-action="open" title="Open project (Ctrl+O)">Open</button>
+    <button data-action="save" title="Save project (Ctrl+S)">Save</button>
+  </div>
+  <div class="group">
+    <button data-action="import" class="accent" title="Import tileset images">+ Import images</button>
+  </div>
+  <div class="group tools">
+    <button data-tool="brush" title="Brush (B)">✎ Brush</button>
+    <button data-tool="eraser" title="Eraser (E) — right-click also erases">⌫ Eraser</button>
+    <button data-tool="fill" title="Bucket fill (G)">◧ Fill</button>
+    <button data-tool="rect" title="Rectangle fill (R)">▭ Rect</button>
+    <button data-tool="picker" title="Eyedropper (I) — or Alt+click">⌖ Pick</button>
+  </div>
+  <div class="group">
+    <button data-action="undo" title="Undo (Ctrl+Z)">↶</button>
+    <button data-action="redo" title="Redo (Ctrl+Y)">↷</button>
+  </div>
+  <div class="group">
+    <button data-action="grid" id="btnGrid" title="Toggle grid (H)">Grid</button>
+    <button data-action="dim" id="btnDim" title="Dim layers other than the active one">Focus layer</button>
+    <button data-action="zoomOut" title="Zoom out (-)">−</button>
+    <span id="zoomLabel">100%</span>
+    <button data-action="zoomIn" title="Zoom in (+)">+</button>
+  </div>
+  <div class="group">
+    <button data-action="resize" title="Resize map">Map size…</button>
+  </div>
+  <div class="spacer"></div>
+  <button data-action="export" class="accent" title="Export PNG (Ctrl+E)">Export PNG</button>
+</header>
+
+<main>
+  <aside id="left">
+    <section class="panel" id="assetsPanel">
+      <div class="panel-head">
+        <span>Tilesets</span>
+        <div class="head-btns">
+          <button data-action="newFolder" title="New folder">+ Folder</button>
+        </div>
+      </div>
+      <input id="assetSearch" type="search" placeholder="Filter…">
+      <div id="tree" class="tree"></div>
+    </section>
+    <section class="panel" id="palettePanel">
+      <div class="panel-head">
+        <span id="paletteTitle">Palette</span>
+        <div class="head-btns">
+          <select id="paletteZoom" title="Palette zoom">
+            <option value="fit">Fit</option>
+            <option value="1" selected>1×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+            <option value="3">3×</option>
+          </select>
+        </div>
+      </div>
+      <div id="paletteWrap"><canvas id="palette"></canvas><div id="paletteEmpty" class="empty">Import an image and pick it in the list above.</div></div>
+    </section>
+  </aside>
+
+  <section id="center">
+    <div id="viewport"><canvas id="mapCanvas"></canvas></div>
+  </section>
+
+  <aside id="right">
+    <section class="panel" id="layersPanel">
+      <div class="panel-head">
+        <span>Layers</span>
+        <div class="head-btns">
+          <button data-action="addLayer" title="Add layer">+</button>
+          <button data-action="dupLayer" title="Duplicate layer">⧉</button>
+          <button data-action="layerUp" title="Move up">▲</button>
+          <button data-action="layerDown" title="Move down">▼</button>
+          <button data-action="delLayer" title="Delete layer">🗑</button>
+        </div>
+      </div>
+      <div id="layers"></div>
+      <label class="row">Opacity <input type="range" id="layerOpacity" min="0" max="100" value="100"> <span id="layerOpacityVal">100%</span></label>
+    </section>
+    <section class="panel" id="infoPanel">
+      <div class="panel-head"><span>Brush</span></div>
+      <canvas id="brushPreview" width="1" height="1"></canvas>
+      <div id="brushInfo" class="muted">Nothing selected</div>
+      <div class="panel-head"><span>Help</span></div>
+      <ul class="help">
+        <li><b>Left drag</b> paint · <b>Right drag</b> erase</li>
+        <li><b>Space/Middle drag</b> pan · <b>Wheel</b> zoom</li>
+        <li><b>Alt+click</b> pick tile under cursor</li>
+        <li>Drag in the palette to grab a multi‑tile object</li>
+        <li>Drag tilesets onto folders to sort them</li>
+        <li>A1–A4 autotiles connect automatically</li>
+      </ul>
+    </section>
+  </aside>
+</main>
+
+<footer id="status">
+  <span id="statusPos">–</span>
+  <span id="statusMap"></span>
+  <span id="statusMsg"></span>
+</footer>
+
+<input type="file" id="fileImages" accept="image/png,image/*" multiple hidden>
+<input type="file" id="fileProject" accept=".json,.ponytiler,application/json" hidden>
+
+<!-- Import dialog -->
+<dialog id="dlgImport">
+  <form method="dialog">
+    <h2>Import images</h2>
+    <p class="muted">Type is guessed from RPG Maker file names (…_A1 … _A5, _B … _E). Images whose tiles are a different size than the project are rescaled.</p>
+    <table class="import-table">
+      <thead><tr><th></th><th>Name</th><th>Type</th><th>Source tile px</th><th>Folder</th></tr></thead>
+      <tbody id="importRows"></tbody>
+    </table>
+    <label class="row">When rescaling use
+      <select id="importResample">
+        <option value="auto">Auto (smooth when shrinking, nearest when enlarging)</option>
+        <option value="nearest">Nearest neighbour (hard pixels)</option>
+        <option value="smooth">Smooth</option>
+      </select>
+    </label>
+    <div class="dlg-btns">
+      <button value="cancel">Cancel</button>
+      <button value="ok" class="accent">Import</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Tileset settings -->
+<dialog id="dlgTileset">
+  <form method="dialog">
+    <h2>Tileset settings</h2>
+    <label class="row">Name <input id="tsName" required></label>
+    <label class="row">Type <select id="tsType"></select></label>
+    <label class="row">Source tile px <input id="tsSrcTile" type="number" min="2" step="2"></label>
+    <label class="row">Rescale with
+      <select id="tsResample">
+        <option value="auto">Auto</option>
+        <option value="nearest">Nearest neighbour</option>
+        <option value="smooth">Smooth</option>
+      </select>
+    </label>
+    <div class="dlg-btns">
+      <button value="cancel">Cancel</button>
+      <button value="ok" class="accent">Apply</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- New project -->
+<dialog id="dlgNew">
+  <form method="dialog">
+    <h2>New project</h2>
+    <label class="row">Width (tiles) <input id="newW" type="number" min="1" max="500" value="40"></label>
+    <label class="row">Height (tiles) <input id="newH" type="number" min="1" max="500" value="30"></label>
+    <label class="row">Tile size (px) <input id="newTs" type="number" min="4" max="256" step="2" value="32"></label>
+    <label class="row"><input id="newKeepTs" type="checkbox" checked> Keep imported tilesets</label>
+    <div class="dlg-btns">
+      <button value="cancel">Cancel</button>
+      <button value="ok" class="accent">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Resize -->
+<dialog id="dlgResize">
+  <form method="dialog">
+    <h2>Map size</h2>
+    <label class="row">Width (tiles) <input id="rsW" type="number" min="1" max="500"></label>
+    <label class="row">Height (tiles) <input id="rsH" type="number" min="1" max="500"></label>
+    <div class="row">Anchor
+      <div id="anchor" class="anchor">
+        <button type="button" data-a="0"></button><button type="button" data-a="1"></button><button type="button" data-a="2"></button>
+        <button type="button" data-a="3"></button><button type="button" data-a="4"></button><button type="button" data-a="5"></button>
+        <button type="button" data-a="6"></button><button type="button" data-a="7"></button><button type="button" data-a="8"></button>
+      </div>
+    </div>
+    <label class="row">Tile size (px) <input id="rsTs" type="number" min="4" max="256" step="2"></label>
+    <p class="muted">Changing the tile size re-processes every imported image to the new size.</p>
+    <div class="dlg-btns">
+      <button value="cancel">Cancel</button>
+      <button value="ok" class="accent">Apply</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Export -->
+<dialog id="dlgExport">
+  <form method="dialog">
+    <h2>Export PNG</h2>
+    <label class="row">Scale
+      <select id="exScale">
+        <option value="0.25">¼×</option>
+        <option value="0.5">½×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+        <option value="3">3×</option>
+        <option value="4">4×</option>
+        <option value="5">5×</option>
+        <option value="6">6×</option>
+        <option value="8">8×</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+    <label class="row" id="exCustomRow" hidden>Output width (px) <input id="exCustomW" type="number" min="1"></label>
+    <label class="row"><input id="exHidden" type="checkbox"> Include hidden layers</label>
+    <label class="row"><input id="exBgOn" type="checkbox"> Background colour <input id="exBg" type="color" value="#000000"></label>
+    <label class="row">File name <input id="exName" value="map"></label>
+    <p id="exSize" class="muted"></p>
+    <p id="exWarn" class="warn" hidden>Non-whole-number scale — pixels can't stay perfectly square. Pick a whole number for crisp output.</p>
+    <div class="dlg-btns">
+      <button value="cancel">Cancel</button>
+      <button value="ok" class="accent">Download PNG</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Generic prompt -->
+<dialog id="dlgPrompt">
+  <form method="dialog">
+    <h2 id="promptTitle"></h2>
+    <input id="promptInput">
+    <div class="dlg-btns">
+      <button value="cancel">Cancel</button>
+      <button value="ok" class="accent">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="js/autotile.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
