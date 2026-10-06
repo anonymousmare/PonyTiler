@@ -18,11 +18,13 @@
     <button data-action="import" class="accent" title="Import tileset images">+ Import images</button>
   </div>
   <div class="group tools">
-    <button data-tool="brush" title="Brush (B)">✎ Brush</button>
-    <button data-tool="eraser" title="Eraser (E) — right-click also erases">⌫ Eraser</button>
-    <button data-tool="fill" title="Bucket fill (G)">◧ Fill</button>
-    <button data-tool="rect" title="Rectangle fill (R)">▭ Rect</button>
-    <button data-tool="picker" title="Eyedropper (I) — or Alt+click">⌖ Pick</button>
+    <button data-tool="brush" title="Brush (W)">✎ Brush</button>
+    <button data-tool="eraser" title="Eraser (A)">⌫ Eraser</button>
+    <button data-tool="fill" title="Bucket fill (S)">◧ Fill</button>
+    <button data-tool="rect" title="Rectangle fill (D)">▭ Rect</button>
+    <button data-tool="picker" title="Eyedropper (F) — or Alt+click">⌖ Pick</button>
+    <button data-tool="select" title="Select &amp; move (E) — drag inside the selection to move it, Del to clear, Ctrl+C to make a stamp">⬚ Select</button>
+    <button data-action="dice" id="btnDice" title="Dice: paint a random tile from everything selected (Ctrl/Shift+drag in a palette to add more)">🎲 Dice</button>
   </div>
   <div class="group">
     <button data-action="undo" title="Undo (Ctrl+Z)">↶</button>
@@ -30,13 +32,15 @@
   </div>
   <div class="group">
     <button data-action="grid" id="btnGrid" title="Toggle grid (H)">Grid</button>
-    <button data-action="dim" id="btnDim" title="Dim layers other than the active one">Focus layer</button>
+    <button data-action="axes" id="btnAxes" title="Toggle x / y axis labels (X)">Axes</button>
+    <button data-action="dim" id="btnDim" title="Dim layers other than the active one (L)">Focus layer</button>
     <button data-action="zoomOut" title="Zoom out (-)">−</button>
     <span id="zoomLabel">100%</span>
     <button data-action="zoomIn" title="Zoom in (+)">+</button>
   </div>
   <div class="group">
     <button data-action="resize" title="Resize map">Map size…</button>
+    <button data-action="help" title="Controls">?</button>
   </div>
   <div class="spacer"></div>
   <button data-action="export" class="accent" title="Export PNG (Ctrl+E)">Export PNG</button>
@@ -65,9 +69,10 @@
             <option value="2">2×</option>
             <option value="3">3×</option>
           </select>
+          <button data-action="unselect" title="Unselect brush (Esc)">✕</button>
         </div>
       </div>
-      <div id="paletteWrap"><canvas id="palette"></canvas><div id="paletteEmpty" class="empty">Import an image and pick it in the list above.</div></div>
+      <div id="paletteWrap" class="palette-wrap"><canvas id="palette" class="palette"></canvas><div id="paletteEmpty" class="empty">Import an image and pick it in the list above.</div></div>
     </section>
   </aside>
 
@@ -90,19 +95,25 @@
       <div id="layers"></div>
       <label class="row">Opacity <input type="range" id="layerOpacity" min="0" max="100" value="100"> <span id="layerOpacityVal">100%</span></label>
     </section>
-    <section class="panel" id="infoPanel">
-      <div class="panel-head"><span>Brush</span></div>
-      <canvas id="brushPreview" width="1" height="1"></canvas>
-      <div id="brushInfo" class="muted">Nothing selected</div>
-      <div class="panel-head"><span>Help</span></div>
-      <ul class="help">
-        <li><b>Left drag</b> paint · <b>Right drag</b> erase</li>
-        <li><b>Space/Middle drag</b> pan · <b>Wheel</b> zoom</li>
-        <li><b>Alt+click</b> pick tile under cursor</li>
-        <li>Drag in the palette to grab a multi‑tile object</li>
-        <li>Drag tilesets onto folders to sort them</li>
-        <li>A1–A4 autotiles connect automatically</li>
-      </ul>
+    <section class="panel" id="palette2Panel">
+      <div class="panel-head">
+        <span id="paletteTitle2">Palette 2</span>
+        <div class="head-btns">
+          <select id="paletteZoom2" title="Palette zoom">
+            <option value="fit" selected>Fit</option>
+            <option value="1">1×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+            <option value="3">3×</option>
+          </select>
+          <button data-action="unselect" title="Unselect brush (Esc)">✕</button>
+        </div>
+      </div>
+      <div id="paletteWrap2" class="palette-wrap"><canvas id="palette2" class="palette"></canvas><div id="paletteEmpty2" class="empty">Drag a tileset here from the list on the left.</div></div>
+    </section>
+    <section class="panel" id="stampsPanel">
+      <div class="panel-head"><span>Stamps</span></div>
+      <div id="stamps"></div>
     </section>
   </aside>
 </main>
@@ -110,6 +121,7 @@
 <footer id="status">
   <span id="statusPos">–</span>
   <span id="statusMap"></span>
+  <span id="statusBrush"></span>
   <span id="statusMsg"></span>
 </footer>
 
@@ -225,6 +237,29 @@
       <button value="cancel">Cancel</button>
       <button value="ok" class="accent">Download PNG</button>
     </div>
+  </form>
+</dialog>
+
+<!-- Help -->
+<dialog id="dlgHelp">
+  <form method="dialog">
+    <h2>Controls</h2>
+    <table class="keys">
+      <tr><td>Paint</td><td>Left drag</td></tr>
+      <tr><td>Grab a stamp from the map</td><td>Right drag (active layer)</td></tr>
+      <tr><td>Pan / zoom</td><td>Space or middle drag · wheel, <kbd>+</kbd> <kbd>-</kbd></td></tr>
+      <tr><td>Fit / 100% and centre</td><td><kbd>0</kbd> / <kbd>Ctrl</kbd>+<kbd>0</kbd></td></tr>
+      <tr><td>Brush · eraser · fill · rect · pick · select</td><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>E</kbd></td></tr>
+      <tr><td>Previous brush</td><td><kbd>Q</kbd></td></tr>
+      <tr><td>Unselect brush / selection</td><td><kbd>Esc</kbd></td></tr>
+      <tr><td>Add to palette selection</td><td><kbd>Ctrl</kbd>/<kbd>Shift</kbd> + drag in a palette</td></tr>
+      <tr><td>Selection: move · clear · make stamp</td><td>drag inside · <kbd>Del</kbd> · <kbd>Ctrl</kbd>+<kbd>C</kbd></td></tr>
+      <tr><td>Grid · axes · focus layer</td><td><kbd>H</kbd> <kbd>X</kbd> <kbd>L</kbd></td></tr>
+      <tr><td>Switch layer</td><td><kbd>[</kbd> <kbd>]</kbd></td></tr>
+      <tr><td>Rename tileset</td><td>double-click it</td></tr>
+      <tr><td>Load tileset into palette 2</td><td>drag it from the list onto palette 2</td></tr>
+    </table>
+    <div class="dlg-btns"><button value="ok" class="accent">Close</button></div>
   </form>
 </dialog>
 
