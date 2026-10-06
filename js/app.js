@@ -556,7 +556,7 @@
     flushDirty();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#15161a';
+    ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
@@ -583,10 +583,10 @@
       var px = 1 / dpr;
       for (var x = 0; x <= S.map.w; x++) { var gx = ox + x * d; ctx.rect(gx, oy, px, mh); }
       for (var y = 0; y <= S.map.h; y++) { var gy = oy + y * d; ctx.rect(ox, gy, mw, px); }
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillStyle = 'rgba(98,214,255,0.16)';
       ctx.fill();
     }
-    ctx.strokeStyle = 'rgba(200,111,216,0.6)';
+    ctx.strokeStyle = '#f2ee4a';
     ctx.lineWidth = 1 / dpr;
     ctx.strokeRect(ox, oy, mw, mh);
 
@@ -678,13 +678,13 @@
     var ty = Math.max(0, Math.min(vh - th, oy - th)), lx = Math.max(0, Math.min(vw - lw, ox - lw));
     var hx = S.hover && S.hover.x >= 0 && S.hover.x < S.map.w ? S.hover.x : -1;
     var hy = S.hover && S.hover.y >= 0 && S.hover.y < S.map.h ? S.hover.y : -1;
-    ctx.font = '11px system-ui, sans-serif';
+    ctx.font = '10px "Lucida Console", Consolas, "DejaVu Sans Mono", monospace';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
 
     var x0 = Math.max(ox, lx + lw), x1 = Math.min(ox + mw, vw);
     if (x1 > x0) {
-      ctx.fillStyle = 'rgba(30,31,36,0.85)';
+      ctx.fillStyle = 'rgba(0,0,0,0.88)';
       ctx.fillRect(x0, ty, x1 - x0, th);
       var sx = axisStep(d, 8 + 7 * String(S.map.w - 1).length);
       var first = Math.max(0, Math.floor((x0 - ox) / d)), last = Math.min(S.map.w - 1, Math.ceil((x1 - ox) / d));
@@ -692,13 +692,13 @@
         if (x % sx && x !== hx) continue;
         var cx = ox + (x + 0.5) * d;
         if (cx < x0 || cx > x1) continue;
-        ctx.fillStyle = x === hx ? '#e9a6f5' : '#9095a3';
+        ctx.fillStyle = x === hx ? '#f2ee4a' : '#3f9a55';
         ctx.fillText(String(x), cx, ty + th / 2);
       }
     }
     var y0 = Math.max(oy, ty + th), y1 = Math.min(oy + mh, vh);
     if (y1 > y0) {
-      ctx.fillStyle = 'rgba(30,31,36,0.85)';
+      ctx.fillStyle = 'rgba(0,0,0,0.88)';
       ctx.fillRect(lx, y0, lw, y1 - y0);
       var sy = axisStep(d, 14);
       var firstY = Math.max(0, Math.floor((y0 - oy) / d)), lastY = Math.min(S.map.h - 1, Math.ceil((y1 - oy) / d));
@@ -706,11 +706,11 @@
         if (y % sy && y !== hy) continue;
         var cy = oy + (y + 0.5) * d;
         if (cy < y0 || cy > y1) continue;
-        ctx.fillStyle = y === hy ? '#e9a6f5' : '#9095a3';
+        ctx.fillStyle = y === hy ? '#f2ee4a' : '#3f9a55';
         ctx.fillText(String(y), lx + lw / 2, cy);
       }
     }
-    ctx.fillStyle = 'rgba(30,31,36,0.95)';
+    ctx.fillStyle = '#000';
     ctx.fillRect(lx, ty, lw, th);
   }
 
@@ -718,8 +718,8 @@
   function checkerPattern() {
     if (!checker) {
       var c = makeCanvas(16, 16), g = c.getContext('2d');
-      g.fillStyle = '#2b2d35'; g.fillRect(0, 0, 16, 16);
-      g.fillStyle = '#25272e'; g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8);
+      g.fillStyle = '#0b100d'; g.fillRect(0, 0, 16, 16);
+      g.fillStyle = '#060906'; g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8);
       checker = ctx.createPattern(c, 'repeat');
     }
     return checker;
@@ -1107,7 +1107,7 @@
     pal.width = Math.max(1, Math.round(t.palCols * d));
     pal.height = Math.max(1, Math.round(t.palRows * d));
     palCtx.imageSmoothingEnabled = false;
-    palCtx.fillStyle = '#202127';
+    palCtx.fillStyle = '#000';
     palCtx.fillRect(0, 0, pal.width, pal.height);
     if (isAuto(t.type)) {
       t.kinds.forEach(function (k) {
@@ -1116,16 +1116,16 @@
     } else {
       palCtx.drawImage(t.img, 0, 0, t.cols * ts, t.rows * ts, 0, 0, t.cols * d, t.rows * d);
     }
-    palCtx.fillStyle = 'rgba(255,255,255,0.08)';
+    palCtx.fillStyle = 'rgba(98,214,255,0.14)';
     for (var x = 1; x < t.palCols; x++) palCtx.fillRect(Math.round(x * d), 0, 1, pal.height);
     for (var y = 1; y < t.palRows; y++) palCtx.fillRect(0, Math.round(y * d), pal.width, 1);
     P.sels.forEach(function (s) {
       var x0 = Math.min(s.x0, s.x1), y0 = Math.min(s.y0, s.y1);
       var w = Math.abs(s.x1 - s.x0) + 1, h = Math.abs(s.y1 - s.y0) + 1;
-      palCtx.fillStyle = 'rgba(200,111,216,0.25)';
+      palCtx.fillStyle = 'rgba(242,238,74,0.18)';
       palCtx.fillRect(x0 * d, y0 * d, w * d, h * d);
       palCtx.lineWidth = 2;
-      palCtx.strokeStyle = '#e9a6f5';
+      palCtx.strokeStyle = '#f2ee4a';
       palCtx.strokeRect(x0 * d + 1, y0 * d + 1, w * d - 2, h * d - 2);
     });
   }
@@ -1190,7 +1190,7 @@
     var b = S.brush;
     $('statusBrush').textContent = !b ? 'No brush' :
       'Brush: ' + (b.stampId ? 'stamp ' : '') + b.w + '×' + b.h + ' · ' + b.name + (isAuto(b.type) ? ' (autotile)' : '') +
-      (S.dice ? ' · 🎲 ' + b.pool.length + ' tiles' : '');
+      (S.dice ? ' · RND ' + b.pool.length + ' tiles' : '');
   }
 
   function captureStamp(r) {
@@ -1342,7 +1342,7 @@
 
   function folderNode(f, depth) {
     var n = nodeBase(depth, 'folder', f.id);
-    n.innerHTML = '<span class="caret">' + (f.open ? '▾' : '▸') + '</span><span class="icon">📁</span>';
+    n.innerHTML = '<span class="caret">' + (f.open ? '▾' : '▸') + '</span><span class="icon">▤</span>';
     var name = document.createElement('span');
     name.className = 'name'; name.textContent = f.name;
     var tag = document.createElement('span');
@@ -1352,7 +1352,7 @@
     acts.append(
       actBtn('+', 'New subfolder', function () { createFolder(f.id); }),
       actBtn('✎', 'Rename', function () { renameFolder(f); }),
-      actBtn('🗑', 'Delete folder (contents move up)', function () { deleteFolder(f); })
+      actBtn('×', 'Delete folder (contents move up)', function () { deleteFolder(f); })
     );
     n.append(name, tag, acts);
     n.addEventListener('click', function (e) {
@@ -1385,7 +1385,7 @@
     acts.className = 'acts';
     acts.append(
       actBtn('⚙', 'Settings', function () { editTileset(t); }),
-      actBtn('🗑', 'Delete tileset', function () { deleteTileset(t); })
+      actBtn('×', 'Delete tileset', function () { deleteTileset(t); })
     );
     n.dataset.ts = t.id;
     n.append(icon, name, tag, acts);
@@ -1702,11 +1702,11 @@
     row.className = 'layer' + (i === S.active ? ' active' : '');
     var eye = document.createElement('button');
     eye.className = 'tog' + (l.visible ? '' : ' off');
-    eye.textContent = '👁'; eye.title = 'Show/hide';
+    eye.textContent = 'V'; eye.title = 'Show/hide';
     eye.addEventListener('click', function (e) { e.stopPropagation(); l.visible = !l.visible; renderLayers(); requestRender(); changed(); });
     var lock = document.createElement('button');
     lock.className = 'tog' + (l.locked ? '' : ' off');
-    lock.textContent = '🔒'; lock.title = 'Lock/unlock';
+    lock.textContent = 'L'; lock.title = 'Lock/unlock';
     lock.addEventListener('click', function (e) { e.stopPropagation(); l.locked = !l.locked; renderLayers(); changed(); });
     var name = document.createElement('span');
     name.className = 'name'; name.textContent = l.name;
