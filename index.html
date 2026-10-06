@@ -40,6 +40,7 @@
   </div>
   <div class="group">
     <button data-action="resize" title="Resize map">Map size…</button>
+    <button data-action="clearKeys" id="btnClearKeys" title="Remove every Ctrl+letter tile hotkey">Clear keys</button>
     <button data-action="help" title="Controls">?</button>
   </div>
   <div class="spacer"></div>
@@ -60,6 +61,7 @@
       <input id="assetSearch" type="search" placeholder="Filter…">
       <div id="tree" class="tree"></div>
     </section>
+    <div id="treeGrip" class="grip" title="Drag to resize"></div>
     <section class="panel" id="palettePanel">
       <div class="panel-head">
         <span id="paletteTitle">Palette</span>
@@ -98,22 +100,8 @@
       <div id="layers"></div>
       <label class="row">Opacity <input type="range" id="layerOpacity" min="0" max="100" value="100"> <span id="layerOpacityVal">100%</span></label>
     </section>
-    <section class="panel" id="palette2Panel">
-      <div class="panel-head">
-        <span id="paletteTitle2">Palette 2</span>
-        <div class="head-btns">
-          <select id="paletteZoom2" title="Palette zoom">
-            <option value="fit" selected>Fit</option>
-            <option value="1">1×</option>
-            <option value="1.5">1.5×</option>
-            <option value="2">2×</option>
-            <option value="3">3×</option>
-          </select>
-          <button data-action="unselect" title="Unselect brush (Esc)">✕</button>
-        </div>
-      </div>
-      <div id="paletteWrap2" class="palette-wrap"><canvas id="palette2" class="palette"></canvas><div id="paletteEmpty2" class="empty">Drag a tileset here from the list on the left.</div></div>
-    </section>
+    <div id="palStack"></div>
+    <button data-action="addPalette" class="add-pal" title="Add another palette">+ Add palette</button>
   </aside>
 </main>
 
@@ -260,13 +248,17 @@
       <tr><td>Wall decoration facing (↑ = seen from below)</td><td><kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> <kbd>←</kbd></td></tr>
       <tr><td>Wall tool: mark · clear · rectangle</td><td><kbd>V</kbd> · left drag · right drag · <kbd>Shift</kbd>+drag</td></tr>
       <tr><td>Previous brush</td><td><kbd>Q</kbd></td></tr>
+      <tr><td>Bind tile (or the selection under the pointer) to a hotkey</td><td>hover a palette · <kbd>Ctrl</kbd>+letter (again to unbind)</td></tr>
+      <tr><td>Use a hotkey</td><td><kbd>Ctrl</kbd>+letter with the pointer off the palettes</td></tr>
       <tr><td>Unselect brush / selection</td><td><kbd>Esc</kbd></td></tr>
       <tr><td>Add to palette selection</td><td><kbd>Ctrl</kbd>/<kbd>Shift</kbd> + drag in a palette</td></tr>
       <tr><td>Selection: move · clear · make stamp</td><td>drag inside · <kbd>Del</kbd> · <kbd>Ctrl</kbd>+<kbd>C</kbd></td></tr>
       <tr><td>Grid · axes · focus layer</td><td><kbd>H</kbd> <kbd>X</kbd> <kbd>L</kbd></td></tr>
       <tr><td>Switch layer</td><td><kbd>[</kbd> <kbd>]</kbd></td></tr>
       <tr><td>Rename tileset</td><td>double-click it</td></tr>
-      <tr><td>Load tileset into palette 2</td><td>drag it from the list onto palette 2</td></tr>
+      <tr><td>Load tileset into an extra palette</td><td>drag it from the list onto the palette</td></tr>
+      <tr><td>Rename layer · palette</td><td>double-click it · double-click its title</td></tr>
+      <tr><td>Resize a panel</td><td>drag the strip along its bottom edge</td></tr>
     </table>
     <div class="dlg-btns"><button value="ok" class="accent">Close</button></div>
   </form>
