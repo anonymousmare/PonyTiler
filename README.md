@@ -14,7 +14,8 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 - **Two palettes**: the left one shows the tileset picked in the list. Drag any tileset onto the right one to keep a second sheet open.
 - **Dice**: paints a random tile from everything you've selected. Ctrl/Shift+drag in either palette adds more tiles to the mix, which is handy for sprinkling grass.
 - **Stamps**: right-drag on the map to copy part of the active layer as a stamp. The last 3 stamps are listed bottom right and saved with the project.
-- **Walls**: the Wall tool (`V`) marks tiles as walls. Walls only show while the tool is active. **Export walls** saves them as a separate PNG for the Foundry VTT module below. Tiles on a layer named `WALLACCESSORY` are framed in yellow and marked in that PNG too. The **+ Wall deco** button in the Layers panel adds that layer for you; it greys out once the layer exists.
+- **Walls**: the Wall tool (`V`) marks tiles as walls. Walls only show while the tool is active. **Export walls** saves them as a separate PNG for the Foundry VTT module below. While the tool is active you also see a live preview of the walls Foundry will get: blue = see-through edge, black = blocks sight.
+- **Wall decorations**: the **+ Wall deco** button in the Layers panel adds a `WALLACCESSORY` layer (it greys out once that layer exists). Paint posters, banners and so on onto it. Their real pixels are used, so a decoration several tiles long counts as one shape. Each decoration faces a direction, set with the **arrow keys** before you paint: ↑ (default) means it's seen from below, ↓ from above, → from the left, ← from the right. An arrow on the brush shows the current direction. To turn decorations you already placed, select them on that layer and press an arrow key.
 - **Axes**: tile x/y coordinates along the map edges (toggle with `X`).
 - **Map size**: resize any time with an anchor. Tile size can be changed too.
 - **Export PNG** at 1×–8× (or a custom width) with nearest-neighbour scaling, so pixels stay sharp. You can use a transparent or solid background.
@@ -26,6 +27,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 | Paint | Left drag |
 | Save a stamp | Right drag on the map (copies the active layer) |
 | Mark / clear walls | Wall tool (`V`): left drag / right drag, Shift+drag for a rectangle |
+| Wall decoration facing | Arrow keys (turns the selection too, on the `WALLACCESSORY` layer) |
 | Pan | Space + drag, or middle-mouse drag |
 | Zoom | Mouse wheel, `+` / `-`, `0` = fit, Ctrl+0 = 100% and centre |
 | Tools | `W` brush, `A` eraser, `S` fill, `D` rect, `F` pick (or Alt+click), `E` select |
@@ -49,8 +51,8 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 This is what you get:
 - **Edge walls** along the outline of every wall area. They block movement but not sight, so players can see the rim of a wall.
 - **Sight-blocking walls** set a bit inside the wall area (25% of a tile by default), so nobody sees through a wall or deep into it.
-- Around **WALLACCESSORY** tiles the sight blocker moves back, with some extra room (25% by default), so decorations hung on walls stay visible. Where a wall is too thin for that, the blocker squeezes down to a thin line instead of opening a hole.
+- Around **wall decorations** the sight blocker bulges away from the side the decoration faces, with some extra room (25% by default). A poster facing ↑ can be read from below, but from above you only see wall. Where a wall is too thin for that, the blocker squeezes down to a thin line instead of opening a hole.
 
 Running it again replaces the walls it made from that tile. By default the tile is hidden afterwards.
 
-PNG colours: red = wall, green = accessory, yellow = both. The grid size is stored inside the PNG.
+PNG colours: red = wall tile, green = decoration pixel (yellow where both overlap). The blue channel stores the decoration's facing. The grid size is stored inside the PNG.
