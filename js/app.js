@@ -22,6 +22,7 @@
     prevBrush: null,
     stamps: [],
     walls: null,
+    accDir: 0,
     marquee: null,
     tool: 'brush',
     dice: false,
@@ -37,7 +38,7 @@
   function cellsEqual(a, b) {
     if (a === b) return true;
     if (!a || !b) return false;
-    return a.t === b.t && a.x === b.x && a.y === b.y && a.k === b.k;
+    return a.t === b.t && a.x === b.x && a.y === b.y && a.k === b.k && (a.d || 0) === (b.d || 0);
   }
 
   // ---------------------------------------------------------------------------
@@ -198,13 +199,34 @@
 
   // Tiles on a layer named WALLACCESSORY are decorations on walls; the Foundry module keeps them visible.
   function isAccessoryLayer(l) { return l.name.trim().toUpperCase() === 'WALLACCESSORY'; }
-  function accessoryMask() {
-    var m = new Uint8Array(S.map.w * S.map.h);
+  // The decorations' actual pixels, one value per map pixel: 0 = nothing, 1 + facing direction otherwise.
+  function accessoryPixels() {
+    flushDirty();
+    var pw = S.map.w * S.ts, ph = S.map.h * S.ts, m = new Uint8Array(pw * ph);
     S.map.layers.forEach(function (l) {
-      if (!isAccessoryLayer(l)) return;
-      for (var i = 0; i < l.cells.length; i++) if (l.cells[i]) m[i] = 1;
+      if (!isAccessoryLayer(l) || !l.cells.some(Boolean)) return;
+      var data = l.ctx.getImageData(0, 0, pw, ph).data;
+      for (var y = 0; y < ph; y++) {
+        var row = ((y / S.ts) | 0) * S.map.w;
+        for (var x = 0; x < pw; x++) {
+          if (data[(y * pw + x) * 4 + 3] < 64) continue;
+          var c = l.cells[row + ((x / S.ts) | 0)];
+          if (c) m[y * pw + x] = 1 + (c.d || 0);
+        }
+      }
     });
     return m;
+  }
+
+  // Same mask at the wall builder's sub-tile resolution; a sub-cell counts if any of its pixels does.
+  function accessoryFine(px) {
+    var SUB = PonyWalls.SUB, pw = S.map.w * S.ts, W = S.map.w * SUB, out = new Uint8Array(W * S.map.h * SUB);
+    for (var i = 0; i < px.length; i++) {
+      if (!px[i]) continue;
+      var x = i % pw, y = (i / pw) | 0;
+      out[((y * SUB / S.ts) | 0) * W + ((x * SUB / S.ts) | 0)] = px[i];
+    }
+    return out;
   }
 
   function rebuildLayerCanvas(layer) {
@@ -218,6 +240,7 @@
   function rebuildAllCanvases() {
     S.map.layers.forEach(rebuildLayerCanvas);
     rebuildLayerCanvas(S.walls);
+    wallPreview = null;
     requestRender();
   }
 
@@ -280,6 +303,8 @@
 
   function setCell(layer, x, y, c) {
     if (x < 0 || y < 0 || x >= S.map.w || y >= S.map.h) return;
+    // Decorations remember which way they face; tiles that already have one (moved, stamped) keep it.
+    if (c && c.d === undefined && !layer.isWall && isAccessoryLayer(layer)) c = Object.assign({}, c, { d: S.accDir });
     var i = y * S.map.w + x, old = layer.cells[i];
     if (cellsEqual(old, c)) return;
     if (stroke) {
@@ -569,17 +594,74 @@
     drawAxes(ox, oy, d);
   }
 
-  function drawWalls(ox, oy, d) {
-    ctx.globalAlpha = 0.5;
-    ctx.drawImage(S.walls.canvas, ox, oy, S.map.w * d, S.map.h * d);
-    ctx.globalAlpha = 1;
-    // Tiles on a WALLACCESSORY layer get a yellow frame so it's clear the wall's vision blocker will avoid them.
-    var acc = accessoryMask(), w = S.map.w, in2 = Math.max(1, d * 0.12);
-    ctx.lineWidth = Math.max(1, d * 0.08);
-    ctx.strokeStyle = '#ffd166';
-    for (var i = 0; i < acc.length; i++) {
-      if (acc[i]) ctx.strokeRect(ox + (i % w) * d + in2, oy + ((i / w) | 0) * d + in2, d - 2 * in2, d - 2 * in2);
+  // Wall-tool view: red wall tiles, decorations tinted yellow with their facing arrow, and a live preview
+  // of what the Foundry module will build (blue = see-through edge, black = blocks sight).
+  var wallPreview = null;
+  function buildWallPreview() {
+    var px = accessoryPixels(), pw = S.map.w * S.ts, ph = S.map.h * S.ts;
+    var tint = makeCanvas(pw, ph), tg = tint.getContext('2d'), img = tg.createImageData(pw, ph);
+    for (var i = 0; i < px.length; i++) if (px[i]) { img.data[i * 4] = 255; img.data[i * 4 + 1] = 209; img.data[i * 4 + 2] = 102; img.data[i * 4 + 3] = 110; }
+    tg.putImageData(img, 0, 0);
+    // One arrow per patch of touching decoration tiles that face the same way.
+    var w = S.map.w, dirOf = new Int8Array(w * S.map.h).fill(-1), arrows = [];
+    S.map.layers.forEach(function (l) {
+      if (isAccessoryLayer(l)) l.cells.forEach(function (c, i) { if (c) dirOf[i] = c.d || 0; });
+    });
+    var seen = new Uint8Array(dirOf.length);
+    for (var j = 0; j < dirOf.length; j++) {
+      if (dirOf[j] < 0 || seen[j]) continue;
+      var stack = [j], sx = 0, sy = 0, n = 0;
+      seen[j] = 1;
+      while (stack.length) {
+        var k = stack.pop(), kx = k % w, ky = (k / w) | 0;
+        sx += kx; sy += ky; n++;
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (o) {
+          var nx = kx + o[0], ny = ky + o[1], q = ny * w + nx;
+          if (nx >= 0 && ny >= 0 && nx < w && ny < S.map.h && !seen[q] && dirOf[q] === dirOf[j]) { seen[q] = 1; stack.push(q); }
+        });
+      }
+      arrows.push({ x: sx / n + 0.5, y: sy / n + 0.5, d: dirOf[j] });
     }
+    var segs = S.walls.cells.some(Boolean) ? PonyWalls.buildWalls({
+      cols: S.map.w, rows: S.map.h, wall: Uint8Array.from(S.walls.cells, function (c) { return c ? 1 : 0; }), acc: accessoryFine(px)
+    }) : { edges: [], cores: [] };
+    return { tint: tint, arrows: arrows, edges: segs.edges, cores: segs.cores };
+  }
+
+  function drawSegs(segs, ox, oy, d, width, color) {
+    ctx.beginPath();
+    segs.forEach(function (s) { ctx.moveTo(ox + s[0] * d, oy + s[1] * d); ctx.lineTo(ox + s[2] * d, oy + s[3] * d); });
+    ctx.lineCap = 'square';
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+  }
+
+  function drawArrow(cx, cy, size, dir, color) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(dir * Math.PI / 2);
+    ctx.beginPath();
+    ctx.moveTo(0, -size); ctx.lineTo(size * 0.8, 0); ctx.lineTo(size * 0.3, 0); ctx.lineTo(size * 0.3, size);
+    ctx.lineTo(-size * 0.3, size); ctx.lineTo(-size * 0.3, 0); ctx.lineTo(-size * 0.8, 0); ctx.closePath();
+    ctx.fillStyle = color; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawWalls(ox, oy, d) {
+    // Rebuilding is too slow to do on every mouse move, so the preview catches up when a stroke ends.
+    if (!wallPreview || (wallPreview.stale && !drag)) wallPreview = buildWallPreview();
+    var mw = S.map.w * d, mh = S.map.h * d;
+    ctx.globalAlpha = 0.45;
+    ctx.drawImage(S.walls.canvas, ox, oy, mw, mh);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(wallPreview.tint, ox, oy, mw, mh);
+    drawSegs(wallPreview.edges, ox, oy, d, 3, '#4aa3ff');
+    drawSegs(wallPreview.cores, ox, oy, d, 4, 'rgba(255,255,255,0.7)');
+    drawSegs(wallPreview.cores, ox, oy, d, 2, '#000');
+    var size = Math.max(5, Math.min(16, d * 0.3));
+    wallPreview.arrows.forEach(function (a) { drawArrow(ox + a.x * d, oy + a.y * d, size, a.d, '#ffd166'); });
   }
 
   // Tile coordinates along the top and left edges of the map; they stick to the viewport edge when scrolled.
@@ -713,6 +795,9 @@
       }
       ctx.globalAlpha = 1;
       outline(ox + tlx * d, oy + tly * d, b.w * d, b.h * d, '#ffffff');
+      if (activeLayer() && isAccessoryLayer(activeLayer()) && !b.cells.some(function (c) { return c && c.d !== undefined; })) {
+        drawArrow(ox + (tlx + b.w / 2) * d, oy + (tly + b.h / 2) * d, Math.max(6, Math.min(18, d * 0.35)), S.accDir, '#ffd166');
+      }
     } else {
       outline(ox + p.x * d, oy + p.y * d, d, d, erasing ? '#ff6b6b' : S.tool === 'select' ? '#7fd8ff' : S.tool === 'wall' ? '#ff4040' : '#ffffff');
     }
@@ -1678,7 +1763,7 @@
           for (var i = 0; i < l.cells.length; i++) {
             var c = l.cells[i];
             if (!c) { data[i] = 0; continue; }
-            var key = c.t + '|' + (c.k !== undefined ? 'k' + c.k : c.x + ',' + c.y);
+            var key = c.t + '|' + (c.k !== undefined ? 'k' + c.k : c.x + ',' + c.y) + (c.d ? '|d' + c.d : '');
             if (keyIdx[key] === undefined) { uniq.push(c); keyIdx[key] = uniq.length; }
             data[i] = keyIdx[key];
           }
@@ -1701,7 +1786,11 @@
       rebuildTsMap();
       S.map.w = p.map.w; S.map.h = p.map.h;
       S.map.layers = p.map.layers.map(function (l) {
-        var tiles = l.tiles.map(function (c) { return c.k !== undefined ? { t: c.t, k: c.k } : { t: c.t, x: c.x, y: c.y }; });
+        var tiles = l.tiles.map(function (c) {
+          var o = c.k !== undefined ? { t: c.t, k: c.k } : { t: c.t, x: c.x, y: c.y };
+          if (c.d !== undefined) o.d = c.d;
+          return o;
+        });
         var cells = l.data.map(function (v) { return v ? tiles[v - 1] : null; });
         return { id: l.id, name: l.name, visible: l.visible !== false, locked: !!l.locked, opacity: l.opacity === undefined ? 1 : l.opacity, cells: cells, dirty: new Set() };
       });
@@ -1752,6 +1841,7 @@
 
   var saveTimer = null;
   function changed(light) {
+    if (wallPreview) wallPreview.stale = true;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       saveTimer = null;
@@ -1889,18 +1979,23 @@
     return new Blob([src.subarray(0, 33), chunk, src.subarray(33)], { type: 'image/png' });
   }
 
-  // Walls PNG: red = wall, green = WALLACCESSORY tile, yellow = both. Same size as the map PNG so it lines up.
-  var WALL_COLORS = [null, '#ff0000', '#00ff00', '#ffff00'];
+  // Walls PNG, same size as the map PNG so it lines up: red = wall tile, green = decoration pixel,
+  // blue = the decoration's facing (0 ↑, 64 →, 128 ↓, 192 ←). Built at 1× and scaled up without smoothing.
   function drawWallMask(g, w, h) {
-    var acc = accessoryMask(), cw = w / S.map.w, ch = h / S.map.h;
-    for (var i = 0; i < acc.length; i++) {
-      var v = (S.walls.cells[i] ? 1 : 0) | (acc[i] ? 2 : 0);
-      if (!v) continue;
-      var x = i % S.map.w, y = (i / S.map.w) | 0;
-      var x0 = Math.round(x * cw), y0 = Math.round(y * ch);
-      g.fillStyle = WALL_COLORS[v];
-      g.fillRect(x0, y0, Math.round((x + 1) * cw) - x0, Math.round((y + 1) * ch) - y0);
+    var px = accessoryPixels(), pw = S.map.w * S.ts, ph = S.map.h * S.ts;
+    var c = makeCanvas(pw, ph), cg = c.getContext('2d'), img = cg.createImageData(pw, ph), D = img.data;
+    for (var i = 0; i < px.length; i++) {
+      var x = i % pw, y = (i / pw) | 0;
+      var wall = !!S.walls.cells[((y / S.ts) | 0) * S.map.w + ((x / S.ts) | 0)];
+      if (!wall && !px[i]) continue;
+      D[i * 4] = wall ? 255 : 0;
+      D[i * 4 + 1] = px[i] ? 255 : 0;
+      D[i * 4 + 2] = px[i] ? (px[i] - 1) * 64 : 0;
+      D[i * 4 + 3] = 255;
     }
+    cg.putImageData(img, 0, 0);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(c, 0, 0, w, h);
   }
 
   function exportDialog(mode) {
@@ -1944,6 +2039,24 @@
         flash('Exported ' + w + '×' + h + ' PNG');
       }, 'image/png');
     });
+  }
+
+  // Which way new wall decorations face. With a selection on the WALLACCESSORY layer, the
+  // decorations inside it are turned too.
+  var DIR_NAMES = ['↑ seen from below', '→ seen from the left', '↓ seen from above', '← seen from the right'];
+  function setAccDir(dir) {
+    S.accDir = dir;
+    var layer = activeLayer(), m = S.marquee, turned = 0;
+    if (m && layer && isAccessoryLayer(layer) && !layer.locked) {
+      beginStroke();
+      for (var y = m.y; y < m.y + m.h; y++) for (var x = m.x; x < m.x + m.w; x++) {
+        var c = layer.cells[y * S.map.w + x];
+        if (c && (c.d || 0) !== dir) { setCell(layer, x, y, Object.assign({}, c, { d: dir })); turned++; }
+      }
+      endStroke();
+    }
+    flash('Wall decorations: ' + DIR_NAMES[dir] + (turned ? ' — turned ' + turned + ' tile' + (turned > 1 ? 's' : '') : ''));
+    requestRender();
   }
 
   // ---------------------------------------------------------------------------
@@ -2038,6 +2151,8 @@
       return;
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && S.marquee) { e.preventDefault(); clearMarquee(); return; }
+    var ARROWS = { ArrowUp: 0, ArrowRight: 1, ArrowDown: 2, ArrowLeft: 3 };
+    if (ARROWS[e.key] !== undefined) { e.preventDefault(); return setAccDir(ARROWS[e.key]); }
     if (e.key === '+' || e.key === '=') return stepZoom(1);
     if (e.key === '-') return stepZoom(-1);
     if (e.key === '0') return fitView();
