@@ -55,7 +55,7 @@ input:focus, select:focus, button:focus-visible { outline: 1px solid var(--accen
 main { flex: 1; display: flex; min-height: 0; }
 aside { width: 340px; display: flex; flex-direction: column; background: var(--panel); min-height: 0; }
 #left { border-right: 1px solid var(--line); }
-#right { border-left: 1px solid var(--line); width: 250px; }
+#right { border-left: 1px solid var(--line); width: 300px; }
 #center { flex: 1; position: relative; min-width: 0; }
 #viewport { position: absolute; inset: 0; overflow: hidden; background: #15161a; }
 #mapCanvas { display: block; width: 100%; height: 100%; }
@@ -91,11 +91,22 @@ aside { width: 340px; display: flex; flex-direction: column; background: var(--p
 .tree .root-drop { min-height: 24px; color: var(--muted); font-size: 11px; padding: 4px; }
 .tree .root-drop.drop { outline: 1px dashed var(--accent); }
 
-#paletteWrap { flex: 1; overflow: auto; position: relative; background: #15161a; margin: 0 6px 6px; border: 1px solid var(--line); }
-#palette { display: block; image-rendering: pixelated; cursor: crosshair; }
+.palette-wrap { flex: 1; overflow: auto; position: relative; background: #15161a; margin: 0 6px 6px; border: 1px solid var(--line); min-height: 60px; }
+.palette-wrap.drop { outline: 1px dashed var(--accent); }
+.palette { display: block; image-rendering: pixelated; cursor: crosshair; }
 .empty { color: var(--muted); padding: 16px; text-align: center; }
 
-#layersPanel { flex: 1; }
+#layersPanel { flex: 0 1 auto; max-height: 32%; }
+#palette2Panel { flex: 1; }
+#stampsPanel { flex: 0 0 auto; }
+#stamps { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 8px; max-height: 150px; overflow: auto; }
+#stamps .stamp { position: relative; width: 52px; height: 52px; border: 1px solid var(--line); border-radius: 3px; background: #15161a; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+#stamps .stamp:hover { border-color: var(--accent-2); }
+#stamps .stamp.active { border-color: var(--accent); background: var(--sel); }
+#stamps .stamp canvas { image-rendering: pixelated; }
+#stamps .stamp button { position: absolute; top: -1px; right: -1px; padding: 0 3px; font-size: 10px; line-height: 13px; display: none; }
+#stamps .stamp:hover button { display: block; }
+#stamps .empty { padding: 4px 0; font-size: 12px; text-align: left; }
 #layers { overflow: auto; flex: 1; padding: 0 4px; }
 .layer {
   display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 3px; cursor: pointer;
@@ -109,12 +120,12 @@ aside { width: 340px; display: flex; flex-direction: column; background: var(--p
 
 .row { display: flex; align-items: center; gap: 8px; padding: 4px 8px; }
 #layersPanel .row input[type=range] { flex: 1; }
-#infoPanel { flex: 0 0 auto; }
-#brushPreview { margin: 0 8px; max-width: calc(100% - 16px); image-rendering: pixelated; background: repeating-conic-gradient(#3a3d48 0 25%, #2e3039 0 50%) 0 0 / 12px 12px; }
-#brushInfo { padding: 4px 8px 8px; }
 .muted { color: var(--muted); }
 .warn { color: var(--warn); }
-.help { margin: 0; padding: 0 8px 10px 24px; color: var(--muted); font-size: 12px; }
+.keys { border-collapse: collapse; }
+.keys td { padding: 3px 10px 3px 0; border-top: 1px solid var(--line); }
+.keys td:first-child { color: var(--muted); }
+kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; background: var(--panel-2); }
 
 #status {
   display: flex; gap: 18px; padding: 3px 10px; background: var(--panel);

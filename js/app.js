@@ -16,13 +16,15 @@
     folders: [],
     tilesets: [],
     tsMap: {},
-    selTs: null,
     selTree: null,
-    palSel: null,
     brush: null,
+    prevBrush: null,
+    stamps: [],
+    marquee: null,
     tool: 'brush',
+    dice: false,
     zoom: 1, ox: 0, oy: 0,
-    grid: true, dim: false,
+    grid: true, dim: false, axes: true,
     hover: null
   };
 
@@ -266,6 +268,7 @@
 
   function beginStroke() { stroke = { type: 'cells', changes: new Map() }; }
   function endStroke() {
+    if (stroke) stroke.changes.forEach(function (ch, key) { if (cellsEqual(ch.before, ch.after)) stroke.changes.delete(key); });
     if (stroke && stroke.changes.size) {
       undoStack.push(stroke);
       if (undoStack.length > 200) undoStack.shift();
@@ -343,9 +346,12 @@
   // ---------------------------------------------------------------------------
   // Painting operations
   // ---------------------------------------------------------------------------
+  function diceOn() { return S.dice && S.brush && S.brush.pool.length > 0; }
+  function diceCell() { var pool = S.brush.pool; return pool[(Math.random() * pool.length) | 0]; }
+
   function brushOffset() {
     var b = S.brush;
-    return b ? { x: Math.floor((b.w - 1) / 2), y: Math.floor((b.h - 1) / 2) } : { x: 0, y: 0 };
+    return b && !diceOn() ? { x: Math.floor((b.w - 1) / 2), y: Math.floor((b.h - 1) / 2) } : { x: 0, y: 0 };
   }
 
   function stampAt(layer, tlx, tly) {
@@ -376,6 +382,11 @@
       setCell(layer, p.x, p.y, null);
       return;
     }
+    if (diceOn()) {
+      var k = p.x + ',' + p.y;
+      if (!drag.stamped[k]) { drag.stamped[k] = true; setCell(layer, p.x, p.y, diceCell()); }
+      return;
+    }
     // Multi-tile brushes snap to a grid anchored at the first stamp so patterns tile cleanly.
     var b = S.brush, off = brushOffset();
     var tlx = p.x - off.x, tly = p.y - off.y;
@@ -388,6 +399,7 @@
   }
 
   function patternCell(x, y, ox, oy) {
+    if (diceOn()) return diceCell();
     var b = S.brush;
     var bx = ((x - ox) % b.w + b.w) % b.w, by = ((y - oy) % b.h + b.h) % b.h;
     return b.cells[by * b.w + bx];
@@ -448,9 +460,12 @@
       var c = l.cells[i], t = S.tsMap[c.t];
       if (!t) continue;
       var px = c.k !== undefined ? c.k % 8 : c.x, py = c.k !== undefined ? Math.floor(c.k / 8) : c.y;
-      selectTileset(t.id, true);
-      S.palSel = { x0: px, y0: py, x1: px, y1: py };
-      buildBrushFromPalette();
+      var P = palettes[1].tsId === t.id ? palettes[1] : palettes[0];
+      if (P === palettes[0]) selectTileset(t.id, true);
+      palettes.forEach(function (q) { q.sels = []; });
+      P.sels = [{ x0: px, y0: py, x1: px, y1: py }];
+      S.lastPal = P;
+      buildBrushFromPalettes();
       setTool('brush');
       flash('Picked from layer "' + l.name + '"');
       return;
@@ -523,6 +538,57 @@
     ctx.strokeRect(ox, oy, mw, mh);
 
     drawOverlay(ox, oy, d);
+    drawAxes(ox, oy, d);
+  }
+
+  // Tile coordinates along the top and left edges of the map; they stick to the viewport edge when scrolled.
+  var AXIS_STEPS = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+  function axisStep(d, minPx) {
+    for (var i = 0; i < AXIS_STEPS.length; i++) if (AXIS_STEPS[i] * d >= minPx) return AXIS_STEPS[i];
+    return AXIS_STEPS[AXIS_STEPS.length - 1];
+  }
+
+  function drawAxes(ox, oy, d) {
+    if (!S.axes) return;
+    var vw = view.clientWidth, vh = view.clientHeight, mw = S.map.w * d, mh = S.map.h * d;
+    var th = 16, lw = 8 + 7 * String(S.map.h - 1).length;
+    var ty = Math.max(0, Math.min(vh - th, oy - th)), lx = Math.max(0, Math.min(vw - lw, ox - lw));
+    var hx = S.hover && S.hover.x >= 0 && S.hover.x < S.map.w ? S.hover.x : -1;
+    var hy = S.hover && S.hover.y >= 0 && S.hover.y < S.map.h ? S.hover.y : -1;
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+
+    var x0 = Math.max(ox, lx + lw), x1 = Math.min(ox + mw, vw);
+    if (x1 > x0) {
+      ctx.fillStyle = 'rgba(30,31,36,0.85)';
+      ctx.fillRect(x0, ty, x1 - x0, th);
+      var sx = axisStep(d, 8 + 7 * String(S.map.w - 1).length);
+      var first = Math.max(0, Math.floor((x0 - ox) / d)), last = Math.min(S.map.w - 1, Math.ceil((x1 - ox) / d));
+      for (var x = first; x <= last; x++) {
+        if (x % sx && x !== hx) continue;
+        var cx = ox + (x + 0.5) * d;
+        if (cx < x0 || cx > x1) continue;
+        ctx.fillStyle = x === hx ? '#e9a6f5' : '#9095a3';
+        ctx.fillText(String(x), cx, ty + th / 2);
+      }
+    }
+    var y0 = Math.max(oy, ty + th), y1 = Math.min(oy + mh, vh);
+    if (y1 > y0) {
+      ctx.fillStyle = 'rgba(30,31,36,0.85)';
+      ctx.fillRect(lx, y0, lw, y1 - y0);
+      var sy = axisStep(d, 14);
+      var firstY = Math.max(0, Math.floor((y0 - oy) / d)), lastY = Math.min(S.map.h - 1, Math.ceil((y1 - oy) / d));
+      for (var y = firstY; y <= lastY; y++) {
+        if (y % sy && y !== hy) continue;
+        var cy = oy + (y + 0.5) * d;
+        if (cy < y0 || cy > y1) continue;
+        ctx.fillStyle = y === hy ? '#e9a6f5' : '#9095a3';
+        ctx.fillText(String(y), lx + lw / 2, cy);
+      }
+    }
+    ctx.fillStyle = 'rgba(30,31,36,0.95)';
+    ctx.fillRect(lx, ty, lw, th);
   }
 
   var checker = null;
@@ -536,11 +602,45 @@
     return checker;
   }
 
+  function normRect(r) {
+    var x0 = Math.max(0, Math.min(r.x0, r.x1)), y0 = Math.max(0, Math.min(r.y0, r.y1));
+    var x1 = Math.min(S.map.w - 1, Math.max(r.x0, r.x1)), y1 = Math.min(S.map.h - 1, Math.max(r.y0, r.y1));
+    if (x1 < x0 || y1 < y0) return null;
+    return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+
+  function dashed(x, y, w, h, color) {
+    outline(x, y, w, h, color);
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.lineDashOffset = -(performance.now() / 60) % 8;
+    ctx.strokeStyle = '#000';
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+  }
+
   function drawOverlay(ox, oy, d) {
+    var m = S.marquee;
+    if (drag && drag.mode === 'move') {
+      ctx.globalAlpha = 0.9;
+      for (var my = 0; my < m.h; my++) for (var mx = 0; mx < m.w; mx++) {
+        var mc = drag.cells[my * m.w + mx];
+        if (mc) drawCellTo(ctx, mc, ox + (m.x + drag.dx + mx) * d, oy + (m.y + drag.dy + my) * d, S.zoom, noSame);
+      }
+      ctx.globalAlpha = 1;
+      dashed(ox + (m.x + drag.dx) * d, oy + (m.y + drag.dy) * d, m.w * d, m.h * d, '#7fd8ff');
+      return;
+    }
+    if (m) dashed(ox + m.x * d, oy + m.y * d, m.w * d, m.h * d, '#7fd8ff');
+    if (drag && (drag.mode === 'select' || drag.mode === 'grab')) {
+      var r = normRect(drag);
+      if (r) dashed(ox + r.x * d, oy + r.y * d, r.w * d, r.h * d, drag.mode === 'grab' ? '#ffd166' : '#7fd8ff');
+      return;
+    }
     if (drag && drag.mode === 'rect') {
       var x0 = Math.min(drag.x0, drag.x1), y0 = Math.min(drag.y0, drag.y1);
       var w = Math.abs(drag.x1 - drag.x0) + 1, h = Math.abs(drag.y1 - drag.y0) + 1;
-      if (!drag.erase && S.brush) {
+      if (!drag.erase && S.brush && !diceOn()) {
         ctx.globalAlpha = 0.6;
         for (var yy = 0; yy < h; yy++) for (var xx = 0; xx < w; xx++) {
           var c = patternCell(x0 + xx, y0 + yy, x0, y0);
@@ -554,7 +654,7 @@
     var p = S.hover;
     if (!p || (drag && drag.mode === 'pan')) return;
     var erasing = S.tool === 'eraser' || (drag && drag.mode === 'erase');
-    if (S.tool === 'brush' && S.brush && !erasing) {
+    if (S.tool === 'brush' && S.brush && !erasing && !diceOn()) {
       var b = S.brush, off = brushOffset();
       var tlx = p.x - off.x, tly = p.y - off.y;
       ctx.globalAlpha = 0.65;
@@ -565,9 +665,15 @@
       ctx.globalAlpha = 1;
       outline(ox + tlx * d, oy + tly * d, b.w * d, b.h * d, '#ffffff');
     } else {
-      outline(ox + p.x * d, oy + p.y * d, d, d, erasing ? '#ff6b6b' : '#ffffff');
+      outline(ox + p.x * d, oy + p.y * d, d, d, erasing ? '#ff6b6b' : S.tool === 'select' ? '#7fd8ff' : '#ffffff');
     }
   }
+
+  // Marching ants need a steady redraw while a selection is visible.
+  (function antsLoop() {
+    if (S.marquee || (drag && (drag.mode === 'select' || drag.mode === 'grab' || drag.mode === 'move'))) requestRender();
+    setTimeout(antsLoop, 120);
+  })();
 
   function noSame() { return false; }
 
@@ -598,6 +704,14 @@
     setZoom(ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, i))], cx, cy);
   }
 
+  function actualSize() {
+    S.zoom = 1;
+    S.ox = Math.round((view.clientWidth - S.map.w * S.ts) / 2);
+    S.oy = Math.round((view.clientHeight - S.map.h * S.ts) / 2);
+    $('zoomLabel').textContent = '100%';
+    requestRender();
+  }
+
   function fitView() {
     var vw = view.clientWidth - 40, vh = view.clientHeight - 40;
     var fit = Math.min(vw / (S.map.w * S.ts), vh / (S.map.h * S.ts));
@@ -622,22 +736,35 @@
       canvas.style.cursor = 'grabbing';
       return;
     }
-    if (e.button !== 0 && e.button !== 2) return;
-    var rightBtn = e.button === 2;
-    if (!rightBtn && (e.altKey || S.tool === 'picker')) return pick(p);
-
     var layer = activeLayer();
-    if (!layer) return flash('Add a layer first');
-    if (!layer.visible) return flash('Layer "' + layer.name + '" is hidden');
-    if (layer.locked) return flash('Layer "' + layer.name + '" is locked');
-
-    if (S.tool === 'fill') return floodFill(p, rightBtn);
-    if (S.tool === 'rect') {
-      drag = { mode: 'rect', erase: rightBtn, x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    if (e.button === 2) {
+      if (!layer) return flash('Add a layer first');
+      drag = { mode: 'grab', x0: p.x, y0: p.y, x1: p.x, y1: p.y };
       requestRender();
       return;
     }
-    var erase = rightBtn || S.tool === 'eraser';
+    if (e.button !== 0) return;
+    if (e.altKey || S.tool === 'picker') return pick(p);
+
+    if (!layer) return flash('Add a layer first');
+    var m = S.marquee;
+    if (S.tool === 'select' && !(m && p.x >= m.x && p.y >= m.y && p.x < m.x + m.w && p.y < m.y + m.h)) {
+      S.marquee = null;
+      drag = { mode: 'select', x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+      requestRender();
+      return;
+    }
+    if (!layer.visible) return flash('Layer "' + layer.name + '" is hidden');
+    if (layer.locked) return flash('Layer "' + layer.name + '" is locked');
+
+    if (S.tool === 'select') return startMove(layer, p);
+    if (S.tool === 'fill') return floodFill(p, false);
+    if (S.tool === 'rect') {
+      drag = { mode: 'rect', erase: false, x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+      requestRender();
+      return;
+    }
+    var erase = S.tool === 'eraser';
     if (!erase && !S.brush) return flash('Pick a tile from the palette first');
     var off = brushOffset();
     drag = { mode: erase ? 'erase' : 'paint', last: p, ax: p.x - off.x, ay: p.y - off.y, stamped: {} };
@@ -656,8 +783,11 @@
       S.ox = drag.ox + e.clientX - drag.sx;
       S.oy = drag.oy + e.clientY - drag.sy;
       requestRender();
-    } else if (drag.mode === 'rect') {
+    } else if (drag.mode === 'rect' || drag.mode === 'select' || drag.mode === 'grab') {
       if (drag.x1 !== p.x || drag.y1 !== p.y) { drag.x1 = p.x; drag.y1 = p.y; requestRender(); }
+    } else if (drag.mode === 'move') {
+      var dx = p.x - drag.sx, dy = p.y - drag.sy;
+      if (dx !== drag.dx || dy !== drag.dy) { drag.dx = dx; drag.dy = dy; requestRender(); }
     } else if (drag.last.x !== p.x || drag.last.y !== p.y) {
       lineCells(drag.last.x, drag.last.y, p.x, p.y, function (x, y) { paintStep({ x: x, y: y }); });
       drag.last = p;
@@ -672,7 +802,41 @@
     canvas.style.cursor = spaceDown ? 'grab' : '';
     if (d.mode === 'rect') fillRect(d, d.erase);
     else if (d.mode === 'paint' || d.mode === 'erase') endStroke();
+    else if (d.mode === 'select') S.marquee = normRect(d);
+    else if (d.mode === 'grab') { var r = normRect(d); if (r) captureStamp(r); }
+    else if (d.mode === 'move') finishMove(d);
     requestRender();
+  }
+
+  // Lift the selected cells off the active layer; they're put down again in finishMove.
+  function startMove(layer, p) {
+    var m = S.marquee, cells = [];
+    beginStroke();
+    for (var y = 0; y < m.h; y++) for (var x = 0; x < m.w; x++) {
+      cells.push(layer.cells[(m.y + y) * S.map.w + m.x + x]);
+      setCell(layer, m.x + x, m.y + y, null);
+    }
+    drag = { mode: 'move', layer: layer, cells: cells, sx: p.x, sy: p.y, dx: 0, dy: 0 };
+    requestRender();
+  }
+
+  function finishMove(d) {
+    var m = S.marquee;
+    for (var y = 0; y < m.h; y++) for (var x = 0; x < m.w; x++) {
+      var c = d.cells[y * m.w + x];
+      if (c) setCell(d.layer, m.x + d.dx + x, m.y + d.dy + y, c);
+    }
+    endStroke();
+    S.marquee = normRect({ x0: m.x + d.dx, y0: m.y + d.dy, x1: m.x + d.dx + m.w - 1, y1: m.y + d.dy + m.h - 1 });
+  }
+
+  function clearMarquee() {
+    var m = S.marquee, layer = activeLayer();
+    if (!m || !layer) return;
+    if (layer.locked) return flash('Layer "' + layer.name + '" is locked');
+    beginStroke();
+    for (var y = 0; y < m.h; y++) for (var x = 0; x < m.w; x++) setCell(layer, m.x + x, m.y + y, null);
+    endStroke();
   }
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
@@ -693,21 +857,94 @@
   // ---------------------------------------------------------------------------
   // Palette
   // ---------------------------------------------------------------------------
-  var pal = $('palette'), palCtx = pal.getContext('2d'), palDrag = null;
+  // Two palettes: the left one follows the tileset list, the right one takes whatever is dropped on it.
+  function makePalette(ids) {
+    var P = {
+      tsId: null, sels: [], drag: false,
+      canvas: $(ids.canvas), wrap: $(ids.wrap), zoomSel: $(ids.zoom), title: $(ids.title), emptyEl: $(ids.empty), label: ids.label
+    };
+    P.ctx = P.canvas.getContext('2d');
 
-  function palZoom() {
-    var v = $('paletteZoom').value, t = S.tsMap[S.selTs];
-    if (v === 'fit' && t) return Math.max(0.25, ($('paletteWrap').clientWidth - 2) / (t.palCols * S.ts));
+    function clampPos(e) {
+      var t = S.tsMap[P.tsId], r = P.canvas.getBoundingClientRect(), d = S.ts * palZoom(P);
+      return {
+        x: Math.max(0, Math.min(t.palCols - 1, Math.floor((e.clientX - r.left) / d))),
+        y: Math.max(0, Math.min(t.palRows - 1, Math.floor((e.clientY - r.top) / d)))
+      };
+    }
+    P.canvas.addEventListener('pointerdown', function (e) {
+      if (!S.tsMap[P.tsId] || e.button !== 0) return;
+      P.canvas.setPointerCapture(e.pointerId);
+      var p = clampPos(e);
+      // Ctrl/Shift adds another rectangle to the selection (handy with the dice).
+      if (!(e.ctrlKey || e.metaKey || e.shiftKey)) palettes.forEach(function (q) { q.sels = []; renderPalette(q); });
+      P.sels.push({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+      P.drag = true;
+      S.lastPal = P;
+      renderPalette(P);
+    });
+    P.canvas.addEventListener('pointermove', function (e) {
+      if (!P.drag) return;
+      var p = clampPos(e), s = P.sels[P.sels.length - 1];
+      if (p.x !== s.x1 || p.y !== s.y1) { s.x1 = p.x; s.y1 = p.y; renderPalette(P); }
+    });
+    P.canvas.addEventListener('pointerup', function () {
+      if (!P.drag) return;
+      P.drag = false;
+      buildBrushFromPalettes();
+      if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
+    });
+    P.zoomSel.addEventListener('change', function () { renderPalette(P); });
+    new ResizeObserver(function () { if (P.zoomSel.value === 'fit') renderPalette(P); }).observe(P.wrap);
+
+    // Tilesets can be dragged from the list straight onto a palette.
+    P.wrap.addEventListener('dragover', function (e) {
+      if (!e.dataTransfer.types.includes('application/x-ponytiler')) return;
+      e.preventDefault();
+      P.wrap.classList.add('drop');
+    });
+    P.wrap.addEventListener('dragleave', function () { P.wrap.classList.remove('drop'); });
+    P.wrap.addEventListener('drop', function (e) {
+      P.wrap.classList.remove('drop');
+      var data = e.dataTransfer.getData('application/x-ponytiler');
+      if (!data) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var parts = data.split(':');
+      if (parts[0] !== 'ts') return flash('Drop a tileset, not a folder');
+      if (P === palettes[0]) selectTileset(parts[1]);
+      else showInPalette(P, parts[1]);
+      changed(true);
+    });
+    return P;
+  }
+
+  var palettes = [
+    makePalette({ canvas: 'palette', wrap: 'paletteWrap', zoom: 'paletteZoom', title: 'paletteTitle', empty: 'paletteEmpty', label: 'Palette' }),
+    makePalette({ canvas: 'palette2', wrap: 'paletteWrap2', zoom: 'paletteZoom2', title: 'paletteTitle2', empty: 'paletteEmpty2', label: 'Palette 2' })
+  ];
+
+  function showInPalette(P, id) {
+    if (P.tsId !== id) P.sels = [];
+    P.tsId = id;
+    renderPalette(P);
+  }
+
+  function renderPalettes() { palettes.forEach(renderPalette); }
+
+  function palZoom(P) {
+    var v = P.zoomSel.value, t = S.tsMap[P.tsId];
+    if (v === 'fit' && t) return Math.max(0.25, (P.wrap.clientWidth - 2) / (t.palCols * S.ts));
     return parseFloat(v) || 1;
   }
 
-  function renderPalette() {
-    var t = S.tsMap[S.selTs];
-    $('paletteEmpty').hidden = !!t;
+  function renderPalette(P) {
+    var t = S.tsMap[P.tsId], pal = P.canvas, palCtx = P.ctx;
+    P.emptyEl.hidden = !!t;
     pal.hidden = !t;
-    $('paletteTitle').textContent = t ? 'Palette — ' + t.name : 'Palette';
+    P.title.textContent = t ? P.label + ' — ' + t.name : P.label;
     if (!t) return;
-    var z = palZoom(), ts = S.ts, d = ts * z;
+    var z = palZoom(P), ts = S.ts, d = ts * z;
     pal.width = Math.max(1, Math.round(t.palCols * d));
     pal.height = Math.max(1, Math.round(t.palRows * d));
     palCtx.imageSmoothingEnabled = false;
@@ -723,8 +960,7 @@
     palCtx.fillStyle = 'rgba(255,255,255,0.08)';
     for (var x = 1; x < t.palCols; x++) palCtx.fillRect(Math.round(x * d), 0, 1, pal.height);
     for (var y = 1; y < t.palRows; y++) palCtx.fillRect(0, Math.round(y * d), pal.width, 1);
-    if (S.palSel) {
-      var s = S.palSel;
+    P.sels.forEach(function (s) {
       var x0 = Math.min(s.x0, s.x1), y0 = Math.min(s.y0, s.y1);
       var w = Math.abs(s.x1 - s.x0) + 1, h = Math.abs(s.y1 - s.y0) + 1;
       palCtx.fillStyle = 'rgba(200,111,216,0.25)';
@@ -732,77 +968,126 @@
       palCtx.lineWidth = 2;
       palCtx.strokeStyle = '#e9a6f5';
       palCtx.strokeRect(x0 * d + 1, y0 * d + 1, w * d - 2, h * d - 2);
-    }
+    });
   }
 
-  function palPos(e) {
-    var r = pal.getBoundingClientRect(), d = S.ts * palZoom();
-    return { x: Math.floor((e.clientX - r.left) / d), y: Math.floor((e.clientY - r.top) / d) };
+  // ---------------------------------------------------------------------------
+  // Brushes & stamps
+  // ---------------------------------------------------------------------------
+  // A brush is the last palette rectangle (or a stamp); its pool is every tile selected, used by the dice.
+  function makeBrush(w, h, cells, name, type, pool) {
+    pool = pool || cells.filter(Boolean);
+    if (!pool.length) return null;
+    return { w: w, h: h, cells: cells, name: name, type: type, pool: pool };
   }
 
-  pal.addEventListener('pointerdown', function (e) {
-    var t = S.tsMap[S.selTs];
-    if (!t || e.button !== 0) return;
-    pal.setPointerCapture(e.pointerId);
-    var p = palPos(e);
-    p.x = Math.max(0, Math.min(t.palCols - 1, p.x));
-    p.y = Math.max(0, Math.min(t.palRows - 1, p.y));
-    palDrag = true;
-    S.palSel = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
-    renderPalette();
-  });
-  pal.addEventListener('pointermove', function (e) {
-    if (!palDrag) return;
-    var t = S.tsMap[S.selTs], p = palPos(e);
-    p.x = Math.max(0, Math.min(t.palCols - 1, p.x));
-    p.y = Math.max(0, Math.min(t.palRows - 1, p.y));
-    if (p.x !== S.palSel.x1 || p.y !== S.palSel.y1) {
-      S.palSel.x1 = p.x; S.palSel.y1 = p.y;
-      renderPalette();
-    }
-  });
-  pal.addEventListener('pointerup', function () {
-    if (!palDrag) return;
-    palDrag = false;
-    buildBrushFromPalette();
-    if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
-  });
-  $('paletteZoom').addEventListener('change', renderPalette);
-  new ResizeObserver(function () { if ($('paletteZoom').value === 'fit') renderPalette(); }).observe($('paletteWrap'));
-
-  function buildBrushFromPalette() {
-    var t = S.tsMap[S.selTs], s = S.palSel;
-    if (!t || !s) { S.brush = null; renderBrushInfo(); return; }
+  function rectCells(t, s) {
     var x0 = Math.min(s.x0, s.x1), y0 = Math.min(s.y0, s.y1);
-    var w = Math.abs(s.x1 - s.x0) + 1, h = Math.abs(s.y1 - s.y0) + 1;
-    var cells = [], any = false;
-    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
-      var c = paletteCell(t, x0 + x, y0 + y);
-      cells.push(c);
-      if (c) any = true;
-    }
-    S.brush = any ? { w: w, h: h, cells: cells, name: t.name, type: t.type } : null;
-    renderPalette();
+    var w = Math.abs(s.x1 - s.x0) + 1, h = Math.abs(s.y1 - s.y0) + 1, cells = [];
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) cells.push(paletteCell(t, x0 + x, y0 + y));
+    return { w: w, h: h, cells: cells };
+  }
+
+  function buildBrushFromPalettes() {
+    var pool = [], last = null, lastT = null, n = 0;
+    palettes.forEach(function (P) {
+      var t = S.tsMap[P.tsId];
+      if (!t) return;
+      P.sels.forEach(function (s) {
+        var r = rectCells(t, s);
+        n++;
+        r.cells.forEach(function (c) { if (c) pool.push(c); });
+        if (P === S.lastPal || !last) { last = r; lastT = t; }
+      });
+    });
+    var b = last ? makeBrush(last.w, last.h, last.cells, n > 1 ? n + ' selections' : lastT.name, lastT.type, pool) : null;
+    if (b) b.src = palettes.map(function (P) { return { ts: P.tsId, sels: P.sels.map(function (s) { return Object.assign({}, s); }) }; });
+    setBrush(b);
+  }
+
+  function setBrush(b) {
+    if (S.brush && S.brush !== b) S.prevBrush = S.brush;
+    S.brush = b;
+    // Restore the palette highlight that belongs to this brush (stamps and "none" clear it).
+    palettes.forEach(function (P, i) {
+      var src = b && b.src && b.src[i];
+      P.sels = src && src.ts === P.tsId ? src.sels.map(function (s) { return Object.assign({}, s); }) : [];
+    });
+    renderPalettes();
     renderBrushInfo();
+    renderStamps();
     requestRender();
   }
 
+  function swapBrush() {
+    if (!S.prevBrush) return flash('No previous brush');
+    var b = S.prevBrush;
+    if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
+    setBrush(b);
+  }
+
   function renderBrushInfo() {
-    var b = S.brush, bp = $('brushPreview');
-    if (!b) {
-      bp.width = 1; bp.height = 1;
-      $('brushInfo').textContent = 'Nothing selected';
+    var b = S.brush;
+    $('statusBrush').textContent = !b ? 'No brush' :
+      'Brush: ' + (b.stampId ? 'stamp ' : '') + b.w + '×' + b.h + ' · ' + b.name + (isAuto(b.type) ? ' (autotile)' : '') +
+      (S.dice ? ' · 🎲 ' + b.pool.length + ' tiles' : '');
+  }
+
+  function captureStamp(r) {
+    var layer = activeLayer(), cells = [];
+    for (var y = 0; y < r.h; y++) for (var x = 0; x < r.w; x++) cells.push(layer.cells[(r.y + y) * S.map.w + r.x + x] || null);
+    if (!cells.some(Boolean)) return flash('Nothing on layer "' + layer.name + '" there');
+    var st = { id: uid('s'), w: r.w, h: r.h, cells: cells };
+    S.stamps.unshift(st);
+    if (S.stamps.length > 40) S.stamps.pop();
+    useStamp(st);
+    if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
+    flash('Saved a ' + r.w + '×' + r.h + ' stamp');
+    changed();
+  }
+
+  function useStamp(st) {
+    var first = st.cells.find(Boolean), t = first && S.tsMap[first.t];
+    var b = makeBrush(st.w, st.h, st.cells, t ? t.name : '?', t ? t.type : 'normal');
+    if (!b) return;
+    b.stampId = st.id;
+    setBrush(b);
+  }
+
+  function renderStamps() {
+    var box = $('stamps');
+    box.innerHTML = '';
+    if (!S.stamps.length) {
+      box.innerHTML = '<div class="empty">Right-drag on the map to save a stamp.</div>';
       return;
     }
-    var z = Math.max(1, Math.min(2, Math.floor(220 / (b.w * S.ts))));
-    bp.width = b.w * S.ts * z; bp.height = b.h * S.ts * z;
-    var g = bp.getContext('2d');
-    g.imageSmoothingEnabled = false;
-    for (var y = 0; y < b.h; y++) for (var x = 0; x < b.w; x++) {
-      var c = b.cells[y * b.w + x];
-      if (c) drawCellTo(g, c, x * S.ts * z, y * S.ts * z, z, noSame);
-    }
-    $('brushInfo').textContent = b.w + '×' + b.h + ' from ' + b.name + (isAuto(b.type) ? ' (autotile)' : '');
+    S.stamps.forEach(function (st) {
+      var el = document.createElement('div');
+      el.className = 'stamp' + (S.brush && S.brush.stampId === st.id ? ' active' : '');
+      el.title = st.w + '×' + st.h + ' stamp';
+      var z = Math.min(48 / (st.w * S.ts), 48 / (st.h * S.ts));
+      var c = makeCanvas(Math.round(st.w * S.ts * z), Math.round(st.h * S.ts * z)), g = c.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      for (var y = 0; y < st.h; y++) for (var x = 0; x < st.w; x++) {
+        var cell = st.cells[y * st.w + x];
+        if (cell) drawCellTo(g, cell, x * S.ts * z, y * S.ts * z, z, noSame);
+      }
+      el.appendChild(c);
+      el.appendChild(actBtn('✕', 'Delete stamp', function () {
+        S.stamps = S.stamps.filter(function (x) { return x !== st; });
+        renderStamps();
+        changed();
+      }));
+      el.addEventListener('click', function () {
+        useStamp(st);
+        if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
+      });
+      box.appendChild(el);
+    });
+  }
+
+  function brushUses(b, tid) {
+    return !!b && b.pool.some(function (c) { return c.t === tid; });
   }
 
   // ---------------------------------------------------------------------------
@@ -823,9 +1108,7 @@
   function byName(a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }); }
 
   function selectTileset(id, reveal) {
-    S.selTs = id;
     S.selTree = { kind: 'ts', id: id };
-    S.palSel = null;
     if (reveal) {
       var t = S.tsMap[id], fid = t && t.folder;
       while (fid) {
@@ -835,8 +1118,9 @@
         fid = f.parent;
       }
     }
-    renderTree();
-    renderPalette();
+    if (reveal) renderTree();
+    else tree.querySelectorAll('.node').forEach(function (n) { n.classList.toggle('selected', n.dataset.ts === id); });
+    showInPalette(palettes[0], id);
   }
 
   function renderTree() {
@@ -908,13 +1192,14 @@
       actBtn('🗑', 'Delete folder (contents move up)', function () { deleteFolder(f); })
     );
     n.append(name, tag, acts);
-    n.addEventListener('click', function () {
+    n.addEventListener('click', function (e) {
       f.open = !f.open;
       S.selTree = { kind: 'folder', id: f.id };
       renderTree();
       changed(true);
+      // The tree is rebuilt on every click, so a double-click is caught here instead of via 'dblclick'.
+      if (e.detail === 2) { f.open = !f.open; renderTree(); renameFolder(f); }
     });
-    n.addEventListener('dblclick', function (e) { e.preventDefault(); renameFolder(f); });
     makeDropTarget(n, f.id);
     return n;
   }
@@ -939,10 +1224,19 @@
       actBtn('⚙', 'Settings', function () { editTileset(t); }),
       actBtn('🗑', 'Delete tileset', function () { deleteTileset(t); })
     );
+    n.dataset.ts = t.id;
     n.append(icon, name, tag, acts);
     n.addEventListener('click', function () { selectTileset(t.id); });
-    n.addEventListener('dblclick', function (e) { e.preventDefault(); editTileset(t); });
+    n.addEventListener('dblclick', function (e) { e.preventDefault(); renameTileset(t); });
     return n;
+  }
+
+  function renameTileset(t) {
+    promptText('Rename tileset', t.name).then(function (name) {
+      if (!name) return;
+      t.name = name;
+      renderTree(); renderPalettes(); changed();
+    });
   }
 
   function firstTile(t) {
@@ -1031,8 +1325,14 @@
     S.map.layers.forEach(function (l) {
       for (var i = 0; i < l.cells.length; i++) if (l.cells[i] && l.cells[i].t === t.id) { l.cells[i] = null; l.dirty.add(i); }
     });
-    if (S.selTs === t.id) { S.selTs = null; S.palSel = null; renderPalette(); }
-    if (S.brush && S.brush.cells.some(function (c) { return c && c.t === t.id; })) { S.brush = null; renderBrushInfo(); }
+    palettes.forEach(function (P) { if (P.tsId === t.id) showInPalette(P, null); });
+    if (brushUses(S.prevBrush, t.id)) S.prevBrush = null;
+    if (brushUses(S.brush, t.id)) { S.brush = null; renderBrushInfo(); }
+    S.stamps = S.stamps.filter(function (st) {
+      st.cells = st.cells.map(function (c) { return c && c.t === t.id ? null : c; });
+      return st.cells.some(Boolean);
+    });
+    renderStamps();
     clearHistory();
     renderTree();
     requestRender();
@@ -1065,10 +1365,11 @@
         S.map.layers.forEach(function (l) {
           l.cells.forEach(function (c, i) { if (c && c.t === t.id) l.dirty.add(i); });
         });
-        if (S.selTs === t.id) S.palSel = null;
-        if (S.brush && S.brush.cells.some(function (c) { return c && c.t === t.id; })) { S.brush = null; renderBrushInfo(); }
+        palettes.forEach(function (P) { if (P.tsId === t.id) P.sels = []; });
+        if (brushUses(S.prevBrush, t.id)) S.prevBrush = null;
+        if (brushUses(S.brush, t.id)) { S.brush = null; renderBrushInfo(); }
       }
-      renderTree(); renderPalette(); requestRender(); changed();
+      renderTree(); renderPalettes(); renderStamps(); requestRender(); changed();
     });
   }
 
@@ -1276,6 +1577,8 @@
     return {
       app: 'PonyTiler', version: 1,
       tileSize: S.ts, nextId: S.nextId,
+      palette2: palettes[1].tsId,
+      stamps: S.stamps.map(function (st) { return { w: st.w, h: st.h, cells: st.cells }; }),
       folders: S.folders.map(function (f) { return { id: f.id, name: f.name, parent: f.parent, open: !!f.open }; }),
       tilesets: S.tilesets.map(function (t) {
         return { id: t.id, name: t.name, type: t.type, folder: t.folder, src: t.src, srcTile: t.srcTile, resample: t.resample };
@@ -1316,7 +1619,9 @@
         return { id: l.id, name: l.name, visible: l.visible !== false, locked: !!l.locked, opacity: l.opacity === undefined ? 1 : l.opacity, cells: cells, dirty: new Set() };
       });
       S.active = Math.min(p.map.active || 0, S.map.layers.length - 1);
-      S.selTs = null; S.palSel = null; S.brush = null; S.selTree = null;
+      S.stamps = (p.stamps || []).map(function (st) { return { id: uid('s'), w: st.w, h: st.h, cells: st.cells }; });
+      resetSelection();
+      palettes[1].tsId = p.palette2 && S.tsMap[p.palette2] ? p.palette2 : null;
       clearHistory();
       rebuildAllCanvases();
       renderAll();
@@ -1333,7 +1638,8 @@
     rebuildTsMap();
     S.map.layers = [newLayer('Ground'), newLayer('Objects')];
     S.active = 0;
-    S.selTs = null; S.palSel = null; S.brush = null; S.selTree = null;
+    if (!old) S.stamps = [];
+    resetSelection();
     clearHistory();
     rebuildAllCanvases();
     renderAll();
@@ -1341,8 +1647,13 @@
     changed();
   }
 
+  function resetSelection() {
+    palettes.forEach(function (P) { P.tsId = null; P.sels = []; });
+    S.brush = null; S.prevBrush = null; S.selTree = null; S.marquee = null; S.lastPal = null;
+  }
+
   function renderAll() {
-    renderTree(); renderPalette(); renderLayers(); renderBrushInfo(); updateStatus(); syncToolButtons();
+    renderTree(); renderPalettes(); renderLayers(); renderBrushInfo(); renderStamps(); updateStatus(); syncToolButtons();
   }
 
   function updateStatus() {
@@ -1499,6 +1810,8 @@
     document.querySelectorAll('[data-tool]').forEach(function (b) { b.classList.toggle('active', b.dataset.tool === S.tool); });
     $('btnGrid').classList.toggle('active', S.grid);
     $('btnDim').classList.toggle('active', S.dim);
+    $('btnAxes').classList.toggle('active', S.axes);
+    $('btnDice').classList.toggle('active', S.dice);
   }
 
   var actions = {
@@ -1520,6 +1833,10 @@
     undo: undo, redo: redo,
     grid: function () { S.grid = !S.grid; syncToolButtons(); requestRender(); },
     dim: function () { S.dim = !S.dim; syncToolButtons(); requestRender(); },
+    axes: function () { S.axes = !S.axes; syncToolButtons(); requestRender(); },
+    dice: function () { S.dice = !S.dice; syncToolButtons(); renderBrushInfo(); requestRender(); },
+    unselect: function () { setBrush(null); },
+    help: function () { showDialog($('dlgHelp')); },
     zoomIn: function () { stepZoom(1); },
     zoomOut: function () { stepZoom(-1); },
     resize: resizeDialog,
@@ -1550,16 +1867,26 @@
     if (mod && k === 's') { e.preventDefault(); saveProject(); return; }
     if (mod && k === 'o') { e.preventDefault(); actions.open(); return; }
     if (mod && k === 'e') { e.preventDefault(); exportDialog(); return; }
+    if (mod && e.key === '0') { e.preventDefault(); actualSize(); return; }
+    if (mod && k === 'c' && S.marquee) { e.preventDefault(); captureStamp(S.marquee); return; }
     if (mod) return;
     if (e.key === ' ') {
       e.preventDefault();
       if (!spaceDown) { spaceDown = true; if (!drag) canvas.style.cursor = 'grab'; }
       return;
     }
-    var map = { b: 'brush', e: 'eraser', g: 'fill', r: 'rect', i: 'picker' };
+    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', b: 'brush', g: 'fill', r: 'rect', i: 'picker' };
     if (map[k]) return setTool(map[k]);
+    if (k === 'q') return swapBrush();
     if (k === 'h') return actions.grid();
-    if (k === 'f') return actions.dim();
+    if (k === 'x') return actions.axes();
+    if (k === 'l') return actions.dim();
+    if (drag && (e.key === 'Escape' || e.key === 'Delete' || e.key === 'Backspace')) return;
+    if (e.key === 'Escape') {
+      if (S.marquee) { S.marquee = null; requestRender(); } else setBrush(null);
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && S.marquee) { e.preventDefault(); clearMarquee(); return; }
     if (e.key === '+' || e.key === '=') return stepZoom(1);
     if (e.key === '-') return stepZoom(-1);
     if (e.key === '0') return fitView();
