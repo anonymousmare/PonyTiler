@@ -14,7 +14,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 - **Two palettes**: the left one shows the tileset picked in the list. Drag any tileset onto the right one to keep a second sheet open.
 - **Dice**: paints a random tile from everything you've selected. Ctrl/Shift+drag in either palette adds more tiles to the mix, which is handy for sprinkling grass.
 - **Stamps**: right-drag on the map to copy part of the active layer as a stamp. The last 3 stamps are listed bottom right and saved with the project.
-- **Walls**: the Wall tool (`V`) marks tiles as walls. Walls only show while the tool is active. **Export walls** saves them as a separate PNG for the Foundry VTT module below. Tiles on a layer named `WALLACCESSORY` are framed in yellow and marked in that PNG too.
+- **Walls**: the Wall tool (`V`) marks tiles as walls. Walls only show while the tool is active. **Export walls** saves them as a separate PNG for the Foundry VTT module below. Tiles on a layer named `WALLACCESSORY` are framed in yellow and marked in that PNG too. The **+ Wall deco** button in the Layers panel adds that layer for you; it greys out once the layer exists.
 - **Axes**: tile x/y coordinates along the map edges (toggle with `X`).
 - **Map size**: resize any time with an anchor. Tile size can be changed too.
 - **Export PNG** at 1×–8× (or a custom width) with nearest-neighbour scaling, so pixels stay sharp. You can use a transparent or solid background.

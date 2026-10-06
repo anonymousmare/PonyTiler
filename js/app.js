@@ -1542,6 +1542,7 @@
     var box = $('layers');
     box.innerHTML = '';
     for (var i = S.map.layers.length - 1; i >= 0; i--) box.appendChild(layerRow(S.map.layers[i], i));
+    $('btnAccLayer').disabled = S.map.layers.some(isAccessoryLayer);
     var l = activeLayer();
     $('layerOpacity').value = l ? Math.round(l.opacity * 100) : 100;
     $('layerOpacityVal').textContent = $('layerOpacity').value + '%';
@@ -1606,6 +1607,18 @@
       if (S.map.layers.length === 1) S.active = 0;
     });
     renderLayers(); requestRender();
+  }
+
+  function addAccessoryLayer() {
+    if (S.map.layers.some(isAccessoryLayer)) return flash('There is already a WALLACCESSORY layer');
+    structural(function () {
+      var l = newLayer('WALLACCESSORY');
+      rebuildLayerCanvas(l);
+      S.map.layers.push(l);
+      S.active = S.map.layers.length - 1;
+    });
+    renderLayers(); requestRender();
+    flash('Added the WALLACCESSORY layer — paint wall decorations on it');
   }
 
   function dupLayer() {
@@ -1980,7 +1993,7 @@
     export: function () { exportDialog('map'); },
     exportWalls: function () { exportDialog('walls'); },
     newFolder: function () { createFolder(); },
-    addLayer: addLayer, dupLayer: dupLayer, delLayer: delLayer,
+    addLayer: addLayer, addAccessoryLayer: addAccessoryLayer, dupLayer: dupLayer, delLayer: delLayer,
     layerUp: function () { moveLayer(1); },
     layerDown: function () { moveLayer(-1); }
   };
