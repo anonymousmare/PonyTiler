@@ -3,6 +3,7 @@
 
   var AT = window.Autotile;
   var $ = function (id) { return document.getElementById(id); };
+  var MAX_STAMPS = 3;
   var ZOOMS = [0.25, 0.33, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12, 16];
 
   // ---------------------------------------------------------------------------
@@ -20,6 +21,7 @@
     brush: null,
     prevBrush: null,
     stamps: [],
+    walls: null,
     marquee: null,
     tool: 'brush',
     dice: false,
@@ -30,6 +32,7 @@
 
   function uid(p) { return p + (S.nextId++); }
   function activeLayer() { return S.map.layers[S.active] || null; }
+  function layerById(id) { return id === 'walls' ? S.walls : S.map.layers.find(function (l) { return l.id === id; }); }
   function isAuto(type) { return !!(AT.TYPES[type] && AT.TYPES[type].auto); }
   function cellsEqual(a, b) {
     if (a === b) return true;
@@ -187,6 +190,23 @@
     };
   }
 
+  // Walls are a mask kept beside the layers: a cell is 1 when that tile is marked as wall.
+  // They are only drawn while the wall tool is active and are exported as their own PNG.
+  function newWallLayer(cells) {
+    return { id: 'walls', name: 'Walls', isWall: true, cells: cells || new Array(S.map.w * S.map.h).fill(null), dirty: new Set() };
+  }
+
+  // Tiles on a layer named WALLACCESSORY are decorations on walls; the Foundry module keeps them visible.
+  function isAccessoryLayer(l) { return l.name.trim().toUpperCase() === 'WALLACCESSORY'; }
+  function accessoryMask() {
+    var m = new Uint8Array(S.map.w * S.map.h);
+    S.map.layers.forEach(function (l) {
+      if (!isAccessoryLayer(l)) return;
+      for (var i = 0; i < l.cells.length; i++) if (l.cells[i]) m[i] = 1;
+    });
+    return m;
+  }
+
   function rebuildLayerCanvas(layer) {
     layer.canvas = makeCanvas(S.map.w * S.ts, S.map.h * S.ts);
     layer.ctx = layer.canvas.getContext('2d');
@@ -197,6 +217,7 @@
 
   function rebuildAllCanvases() {
     S.map.layers.forEach(rebuildLayerCanvas);
+    rebuildLayerCanvas(S.walls);
     requestRender();
   }
 
@@ -222,6 +243,11 @@
     layer.ctx.clearRect(x * ts, y * ts, ts, ts);
     var c = layer.cells[i];
     if (!c) return;
+    if (layer.isWall) {
+      layer.ctx.fillStyle = '#ff4040';
+      layer.ctx.fillRect(x * ts, y * ts, ts, ts);
+      return;
+    }
     drawCellTo(layer.ctx, c, x * ts, y * ts, 1, function (dx, dy) { return sameAt(layer, x + dx, y + dy, c); });
   }
 
@@ -240,7 +266,7 @@
   }
 
   function flushDirty() {
-    S.map.layers.forEach(function (l) {
+    S.map.layers.concat(S.walls ? [S.walls] : []).forEach(function (l) {
       if (!l.dirty.size) return;
       l.dirty.forEach(function (i) { redrawCell(l, i); });
       l.dirty.clear();
@@ -281,7 +307,7 @@
 
   function snapshot() {
     return {
-      w: S.map.w, h: S.map.h, active: S.active,
+      w: S.map.w, h: S.map.h, active: S.active, walls: S.walls.cells.slice(),
       layers: S.map.layers.map(function (l) {
         return { id: l.id, name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity, cells: l.cells.slice() };
       })
@@ -300,6 +326,7 @@
       return l;
     });
     S.active = Math.min(snap.active, S.map.layers.length - 1);
+    S.walls.cells = snap.walls.slice();
     rebuildAllCanvases();
     renderLayers();
     updateStatus();
@@ -316,7 +343,7 @@
 
   function applyCellChanges(st, useBefore) {
     st.changes.forEach(function (ch) {
-      var l = S.map.layers.find(function (x) { return x.id === ch.layerId; });
+      var l = layerById(ch.layerId);
       if (!l || ch.i >= l.cells.length) return;
       l.cells[ch.i] = useBefore ? ch.before : ch.after;
       markDirty(l, ch.i % S.map.w, (ch.i / S.map.w) | 0);
@@ -524,6 +551,7 @@
       ctx.drawImage(l.canvas, ox, oy, mw, mh);
     });
     ctx.globalAlpha = 1;
+    if (S.tool === 'wall') drawWalls(ox, oy, d);
 
     if (S.grid && d >= 6) {
       ctx.beginPath();
@@ -539,6 +567,19 @@
 
     drawOverlay(ox, oy, d);
     drawAxes(ox, oy, d);
+  }
+
+  function drawWalls(ox, oy, d) {
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(S.walls.canvas, ox, oy, S.map.w * d, S.map.h * d);
+    ctx.globalAlpha = 1;
+    // Tiles on a WALLACCESSORY layer get a yellow frame so it's clear the wall's vision blocker will avoid them.
+    var acc = accessoryMask(), w = S.map.w, in2 = Math.max(1, d * 0.12);
+    ctx.lineWidth = Math.max(1, d * 0.08);
+    ctx.strokeStyle = '#ffd166';
+    for (var i = 0; i < acc.length; i++) {
+      if (acc[i]) ctx.strokeRect(ox + (i % w) * d + in2, oy + ((i / w) | 0) * d + in2, d - 2 * in2, d - 2 * in2);
+    }
   }
 
   // Tile coordinates along the top and left edges of the map; they stick to the viewport edge when scrolled.
@@ -637,6 +678,14 @@
       if (r) dashed(ox + r.x * d, oy + r.y * d, r.w * d, r.h * d, drag.mode === 'grab' ? '#ffd166' : '#7fd8ff');
       return;
     }
+    if (drag && drag.mode === 'wallrect') {
+      var wr = normRect(drag);
+      if (wr) {
+        if (drag.val) { ctx.fillStyle = 'rgba(255,64,64,0.4)'; ctx.fillRect(ox + wr.x * d, oy + wr.y * d, wr.w * d, wr.h * d); }
+        outline(ox + wr.x * d, oy + wr.y * d, wr.w * d, wr.h * d, drag.val ? '#ff4040' : '#ffffff');
+      }
+      return;
+    }
     if (drag && drag.mode === 'rect') {
       var x0 = Math.min(drag.x0, drag.x1), y0 = Math.min(drag.y0, drag.y1);
       var w = Math.abs(drag.x1 - drag.x0) + 1, h = Math.abs(drag.y1 - drag.y0) + 1;
@@ -665,7 +714,7 @@
       ctx.globalAlpha = 1;
       outline(ox + tlx * d, oy + tly * d, b.w * d, b.h * d, '#ffffff');
     } else {
-      outline(ox + p.x * d, oy + p.y * d, d, d, erasing ? '#ff6b6b' : S.tool === 'select' ? '#7fd8ff' : '#ffffff');
+      outline(ox + p.x * d, oy + p.y * d, d, d, erasing ? '#ff6b6b' : S.tool === 'select' ? '#7fd8ff' : S.tool === 'wall' ? '#ff4040' : '#ffffff');
     }
   }
 
@@ -736,6 +785,18 @@
       canvas.style.cursor = 'grabbing';
       return;
     }
+    // Wall tool: left marks walls, right clears them, Shift+drag does a rectangle.
+    if (S.tool === 'wall' && (e.button === 0 || e.button === 2)) {
+      var val = e.button === 0 ? 1 : null;
+      if (e.shiftKey) drag = { mode: 'wallrect', val: val, x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+      else {
+        drag = { mode: 'wall', val: val, last: p };
+        beginStroke();
+        setCell(S.walls, p.x, p.y, val);
+      }
+      requestRender();
+      return;
+    }
     var layer = activeLayer();
     if (e.button === 2) {
       if (!layer) return flash('Add a layer first');
@@ -783,13 +844,17 @@
       S.ox = drag.ox + e.clientX - drag.sx;
       S.oy = drag.oy + e.clientY - drag.sy;
       requestRender();
-    } else if (drag.mode === 'rect' || drag.mode === 'select' || drag.mode === 'grab') {
+    } else if (drag.mode === 'rect' || drag.mode === 'select' || drag.mode === 'grab' || drag.mode === 'wallrect') {
       if (drag.x1 !== p.x || drag.y1 !== p.y) { drag.x1 = p.x; drag.y1 = p.y; requestRender(); }
     } else if (drag.mode === 'move') {
       var dx = p.x - drag.sx, dy = p.y - drag.sy;
       if (dx !== drag.dx || dy !== drag.dy) { drag.dx = dx; drag.dy = dy; requestRender(); }
     } else if (drag.last.x !== p.x || drag.last.y !== p.y) {
-      lineCells(drag.last.x, drag.last.y, p.x, p.y, function (x, y) { paintStep({ x: x, y: y }); });
+      var wd = drag;
+      lineCells(drag.last.x, drag.last.y, p.x, p.y, function (x, y) {
+        if (wd.mode === 'wall') setCell(S.walls, x, y, wd.val);
+        else paintStep({ x: x, y: y });
+      });
       drag.last = p;
       requestRender();
     }
@@ -801,7 +866,15 @@
     drag = null;
     canvas.style.cursor = spaceDown ? 'grab' : '';
     if (d.mode === 'rect') fillRect(d, d.erase);
-    else if (d.mode === 'paint' || d.mode === 'erase') endStroke();
+    else if (d.mode === 'paint' || d.mode === 'erase' || d.mode === 'wall') endStroke();
+    else if (d.mode === 'wallrect') {
+      var wr = normRect(d);
+      if (wr) {
+        beginStroke();
+        for (var y = wr.y; y < wr.y + wr.h; y++) for (var x = wr.x; x < wr.x + wr.w; x++) setCell(S.walls, x, y, d.val);
+        endStroke();
+      }
+    }
     else if (d.mode === 'select') S.marquee = normRect(d);
     else if (d.mode === 'grab') { var r = normRect(d); if (r) captureStamp(r); }
     else if (d.mode === 'move') finishMove(d);
@@ -1039,7 +1112,7 @@
     if (!cells.some(Boolean)) return flash('Nothing on layer "' + layer.name + '" there');
     var st = { id: uid('s'), w: r.w, h: r.h, cells: cells };
     S.stamps.unshift(st);
-    if (S.stamps.length > 40) S.stamps.pop();
+    if (S.stamps.length > MAX_STAMPS) S.stamps.length = MAX_STAMPS;
     useStamp(st);
     if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
     flash('Saved a ' + r.w + '×' + r.h + ' stamp');
@@ -1469,6 +1542,7 @@
     var box = $('layers');
     box.innerHTML = '';
     for (var i = S.map.layers.length - 1; i >= 0; i--) box.appendChild(layerRow(S.map.layers[i], i));
+    $('btnAccLayer').disabled = S.map.layers.some(isAccessoryLayer);
     var l = activeLayer();
     $('layerOpacity').value = l ? Math.round(l.opacity * 100) : 100;
     $('layerOpacityVal').textContent = $('layerOpacity').value + '%';
@@ -1535,6 +1609,18 @@
     renderLayers(); requestRender();
   }
 
+  function addAccessoryLayer() {
+    if (S.map.layers.some(isAccessoryLayer)) return flash('There is already a WALLACCESSORY layer');
+    structural(function () {
+      var l = newLayer('WALLACCESSORY');
+      rebuildLayerCanvas(l);
+      S.map.layers.push(l);
+      S.active = S.map.layers.length - 1;
+    });
+    renderLayers(); requestRender();
+    flash('Added the WALLACCESSORY layer — paint wall decorations on it');
+  }
+
   function dupLayer() {
     var src = activeLayer();
     if (!src) return;
@@ -1585,6 +1671,7 @@
       }),
       map: {
         w: S.map.w, h: S.map.h, active: S.active,
+        walls: S.walls.cells.map(function (c) { return c ? '1' : '0'; }).join(''),
         layers: S.map.layers.map(function (l) {
           // Cells are stored as indexes into a per-layer list of unique tiles to keep files small.
           var uniq = [], keyIdx = {}, data = new Array(l.cells.length);
@@ -1619,7 +1706,9 @@
         return { id: l.id, name: l.name, visible: l.visible !== false, locked: !!l.locked, opacity: l.opacity === undefined ? 1 : l.opacity, cells: cells, dirty: new Set() };
       });
       S.active = Math.min(p.map.active || 0, S.map.layers.length - 1);
-      S.stamps = (p.stamps || []).map(function (st) { return { id: uid('s'), w: st.w, h: st.h, cells: st.cells }; });
+      S.stamps = (p.stamps || []).slice(0, MAX_STAMPS).map(function (st) { return { id: uid('s'), w: st.w, h: st.h, cells: st.cells }; });
+      var walls = typeof p.map.walls === 'string' && p.map.walls.length === S.map.w * S.map.h ? p.map.walls : '';
+      S.walls = newWallLayer(Array.prototype.map.call(walls || '0'.repeat(S.map.w * S.map.h), function (ch) { return ch === '1' ? 1 : null; }));
       resetSelection();
       palettes[1].tsId = p.palette2 && S.tsMap[p.palette2] ? p.palette2 : null;
       clearHistory();
@@ -1637,6 +1726,7 @@
     else S.tilesets.forEach(processTileset);
     rebuildTsMap();
     S.map.layers = [newLayer('Ground'), newLayer('Objects')];
+    S.walls = newWallLayer();
     S.active = 0;
     if (!old) S.stamps = [];
     resetSelection();
@@ -1732,7 +1822,7 @@
           var ax = anchor % 3, ay = Math.floor(anchor / 3);
           var offX = ax === 0 ? 0 : ax === 1 ? Math.floor((nw - S.map.w) / 2) : nw - S.map.w;
           var offY = ay === 0 ? 0 : ay === 1 ? Math.floor((nh - S.map.h) / 2) : nh - S.map.h;
-          S.map.layers.forEach(function (l) {
+          S.map.layers.concat([S.walls]).forEach(function (l) {
             var cells = new Array(nw * nh).fill(null);
             for (var y = 0; y < S.map.h; y++) for (var x = 0; x < S.map.w; x++) {
               var nx = x + offX, ny = y + offY;
@@ -1772,8 +1862,54 @@
   }
   ['exScale', 'exCustomW'].forEach(function (id) { $(id).addEventListener('input', updateExportInfo); });
 
-  function exportDialog() {
+  // PNG chunks need a CRC-32; used to embed the wall grid size into the walls PNG.
+  var crcTable = null;
+  function crc32(bytes) {
+    if (!crcTable) {
+      crcTable = new Uint32Array(256);
+      for (var n = 0; n < 256; n++) {
+        var c = n;
+        for (var k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        crcTable[n] = c >>> 0;
+      }
+    }
+    var crc = 0xffffffff;
+    for (var i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  // Insert a tEXt chunk right after IHDR (8-byte signature + 25-byte IHDR chunk).
+  function pngWithText(buf, key, text) {
+    var src = new Uint8Array(buf), data = new TextEncoder().encode(key + '\0' + text);
+    var chunk = new Uint8Array(12 + data.length), dv = new DataView(chunk.buffer);
+    dv.setUint32(0, data.length);
+    chunk.set([116, 69, 88, 116], 4);
+    chunk.set(data, 8);
+    dv.setUint32(8 + data.length, crc32(chunk.subarray(4, 8 + data.length)));
+    return new Blob([src.subarray(0, 33), chunk, src.subarray(33)], { type: 'image/png' });
+  }
+
+  // Walls PNG: red = wall, green = WALLACCESSORY tile, yellow = both. Same size as the map PNG so it lines up.
+  var WALL_COLORS = [null, '#ff0000', '#00ff00', '#ffff00'];
+  function drawWallMask(g, w, h) {
+    var acc = accessoryMask(), cw = w / S.map.w, ch = h / S.map.h;
+    for (var i = 0; i < acc.length; i++) {
+      var v = (S.walls.cells[i] ? 1 : 0) | (acc[i] ? 2 : 0);
+      if (!v) continue;
+      var x = i % S.map.w, y = (i / S.map.w) | 0;
+      var x0 = Math.round(x * cw), y0 = Math.round(y * ch);
+      g.fillStyle = WALL_COLORS[v];
+      g.fillRect(x0, y0, Math.round((x + 1) * cw) - x0, Math.round((y + 1) * ch) - y0);
+    }
+  }
+
+  function exportDialog(mode) {
+    var walls = mode === 'walls';
+    if (walls && !S.walls.cells.some(Boolean)) return flash('No walls yet — pick the Wall tool (V) and paint some');
     if (!$('exCustomW').value) $('exCustomW').value = S.map.w * S.ts * 2;
+    $('exTitle').textContent = walls ? 'Export walls PNG' : 'Export PNG';
+    $('exHiddenRow').hidden = $('exBgRow').hidden = walls;
+    $('exWallNote').hidden = !walls;
     updateExportInfo();
     showDialog($('dlgExport')).then(function (ok) {
       if (!ok) return;
@@ -1782,6 +1918,19 @@
       var w = Math.round(S.map.w * S.ts * s), h = Math.round(S.map.h * S.ts * s);
       var out = makeCanvas(w, h), g = out.getContext('2d');
       g.imageSmoothingEnabled = false;
+      var base = ($('exName').value || 'map').replace(/[^\w\-. ]+/g, '_');
+      if (walls) {
+        drawWallMask(g, w, h);
+        var meta = JSON.stringify({ app: 'PonyTiler', kind: 'walls', cols: S.map.w, rows: S.map.h, tileSize: S.ts });
+        out.toBlob(function (blob) {
+          if (!blob) return alert('Export failed — the image is probably too large for this browser. Try a smaller scale.');
+          blob.arrayBuffer().then(function (buf) {
+            download(pngWithText(buf, 'ponytiler', meta), base + '-walls.png');
+            flash('Exported ' + w + '×' + h + ' walls PNG');
+          });
+        }, 'image/png');
+        return;
+      }
       if ($('exBgOn').checked) { g.fillStyle = $('exBg').value; g.fillRect(0, 0, w, h); }
       var hidden = $('exHidden').checked;
       S.map.layers.forEach(function (l) {
@@ -1791,7 +1940,7 @@
       });
       out.toBlob(function (blob) {
         if (!blob) return alert('Export failed — the image is probably too large for this browser. Try a smaller scale.');
-        download(blob, ($('exName').value || 'map').replace(/[^\w\-. ]+/g, '_') + '.png');
+        download(blob, base + '.png');
         flash('Exported ' + w + '×' + h + ' PNG');
       }, 'image/png');
     });
@@ -1801,6 +1950,7 @@
   // Toolbar & keyboard
   // ---------------------------------------------------------------------------
   function setTool(t) {
+    if (t === 'wall' && S.tool !== 'wall') flash('Walls: left-drag marks, right-drag clears, Shift+drag for a rectangle');
     S.tool = t;
     syncToolButtons();
     requestRender();
@@ -1840,9 +1990,10 @@
     zoomIn: function () { stepZoom(1); },
     zoomOut: function () { stepZoom(-1); },
     resize: resizeDialog,
-    export: exportDialog,
+    export: function () { exportDialog('map'); },
+    exportWalls: function () { exportDialog('walls'); },
     newFolder: function () { createFolder(); },
-    addLayer: addLayer, dupLayer: dupLayer, delLayer: delLayer,
+    addLayer: addLayer, addAccessoryLayer: addAccessoryLayer, dupLayer: dupLayer, delLayer: delLayer,
     layerUp: function () { moveLayer(1); },
     layerDown: function () { moveLayer(-1); }
   };
@@ -1866,7 +2017,7 @@
     if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
     if (mod && k === 's') { e.preventDefault(); saveProject(); return; }
     if (mod && k === 'o') { e.preventDefault(); actions.open(); return; }
-    if (mod && k === 'e') { e.preventDefault(); exportDialog(); return; }
+    if (mod && k === 'e') { e.preventDefault(); exportDialog('map'); return; }
     if (mod && e.key === '0') { e.preventDefault(); actualSize(); return; }
     if (mod && k === 'c' && S.marquee) { e.preventDefault(); captureStamp(S.marquee); return; }
     if (mod) return;
@@ -1875,7 +2026,7 @@
       if (!spaceDown) { spaceDown = true; if (!drag) canvas.style.cursor = 'grab'; }
       return;
     }
-    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', b: 'brush', g: 'fill', r: 'rect', i: 'picker' };
+    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', v: 'wall', b: 'brush', g: 'fill', r: 'rect', i: 'picker' };
     if (map[k]) return setTool(map[k]);
     if (k === 'q') return swapBrush();
     if (k === 'h') return actions.grid();

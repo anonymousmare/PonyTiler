@@ -24,6 +24,7 @@
     <button data-tool="rect" title="Rectangle fill (D)">▭ Rect</button>
     <button data-tool="picker" title="Eyedropper (F) — or Alt+click">⌖ Pick</button>
     <button data-tool="select" title="Select &amp; move (E) — drag inside the selection to move it, Del to clear, Ctrl+C to make a stamp">⬚ Select</button>
+    <button data-tool="wall" title="Walls (V): left-drag marks wall tiles, right-drag clears, Shift+drag for a rectangle. Walls only show while this tool is active.">▦ Wall</button>
     <button data-action="dice" id="btnDice" title="Dice: paint a random tile from everything selected (Ctrl/Shift+drag in a palette to add more)">🎲 Dice</button>
   </div>
   <div class="group">
@@ -43,6 +44,7 @@
     <button data-action="help" title="Controls">?</button>
   </div>
   <div class="spacer"></div>
+  <button data-action="exportWalls" title="Export the wall mask as its own PNG (for the Foundry VTT module)">Export walls</button>
   <button data-action="export" class="accent" title="Export PNG (Ctrl+E)">Export PNG</button>
 </header>
 
@@ -86,6 +88,7 @@
         <span>Layers</span>
         <div class="head-btns">
           <button data-action="addLayer" title="Add layer">+</button>
+          <button data-action="addAccessoryLayer" id="btnAccLayer" title="Add a WALLACCESSORY layer: decorations painted on it stay visible on walls in Foundry">+ Wall deco</button>
           <button data-action="dupLayer" title="Duplicate layer">⧉</button>
           <button data-action="layerUp" title="Move up">▲</button>
           <button data-action="layerDown" title="Move down">▼</button>
@@ -212,7 +215,8 @@
 <!-- Export -->
 <dialog id="dlgExport">
   <form method="dialog">
-    <h2>Export PNG</h2>
+    <h2 id="exTitle">Export PNG</h2>
+    <p id="exWallNote" class="muted" hidden>Red = wall, green = WALLACCESSORY tile, yellow = both. Use the same scale as your map PNG so they line up in Foundry.</p>
     <label class="row">Scale
       <select id="exScale">
         <option value="0.25">¼×</option>
@@ -228,8 +232,8 @@
       </select>
     </label>
     <label class="row" id="exCustomRow" hidden>Output width (px) <input id="exCustomW" type="number" min="1"></label>
-    <label class="row"><input id="exHidden" type="checkbox"> Include hidden layers</label>
-    <label class="row"><input id="exBgOn" type="checkbox"> Background colour <input id="exBg" type="color" value="#000000"></label>
+    <label class="row" id="exHiddenRow"><input id="exHidden" type="checkbox"> Include hidden layers</label>
+    <label class="row" id="exBgRow"><input id="exBgOn" type="checkbox"> Background colour <input id="exBg" type="color" value="#000000"></label>
     <label class="row">File name <input id="exName" value="map"></label>
     <p id="exSize" class="muted"></p>
     <p id="exWarn" class="warn" hidden>Non-whole-number scale — pixels can't stay perfectly square. Pick a whole number for crisp output.</p>
@@ -250,6 +254,7 @@
       <tr><td>Pan / zoom</td><td>Space or middle drag · wheel, <kbd>+</kbd> <kbd>-</kbd></td></tr>
       <tr><td>Fit / 100% and centre</td><td><kbd>0</kbd> / <kbd>Ctrl</kbd>+<kbd>0</kbd></td></tr>
       <tr><td>Brush · eraser · fill · rect · pick · select</td><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>E</kbd></td></tr>
+      <tr><td>Wall tool: mark · clear · rectangle</td><td><kbd>V</kbd> · left drag · right drag · <kbd>Shift</kbd>+drag</td></tr>
       <tr><td>Previous brush</td><td><kbd>Q</kbd></td></tr>
       <tr><td>Unselect brush / selection</td><td><kbd>Esc</kbd></td></tr>
       <tr><td>Add to palette selection</td><td><kbd>Ctrl</kbd>/<kbd>Shift</kbd> + drag in a palette</td></tr>

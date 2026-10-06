@@ -11,6 +11,7 @@
   --warn: #f0b35a;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 body {
   background: var(--bg);
@@ -31,6 +32,7 @@ button, select, input {
 }
 button { cursor: pointer; }
 button:hover { border-color: var(--accent-2); }
+button:disabled { opacity: .4; cursor: default; border-color: var(--line); }
 button.active { background: var(--accent-2); border-color: var(--accent); }
 button.accent { background: var(--accent-2); border-color: var(--accent); }
 button.accent:hover { background: var(--accent); }
