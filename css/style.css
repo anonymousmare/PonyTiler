@@ -156,6 +156,20 @@ aside { width: 340px; display: flex; flex-direction: column; background: var(--p
 #palStack { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .xpal { flex: 0 0 260px; border-bottom: none; }
 .xpal .pal-title { cursor: text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* The one round thing in the app: the palette background swatch. */
+.pal-bg {
+  width: 12px; height: 12px !important; padding: 0 !important; margin-right: 2px; align-self: center;
+  border: 1px solid var(--text); border-radius: 50% !important; background: transparent;
+}
+.pal-bg:hover { border-color: var(--accent); }
+.pal-bg.set { border-color: var(--line-hi); }
+.bg-pop {
+  position: fixed; z-index: 1000; padding: 3px; background: var(--panel);
+  border: 1px solid var(--accent); box-shadow: 3px 3px 0 var(--accent-2);
+}
+.bg-pop canvas { display: block; width: 180px; height: 90px; cursor: crosshair; image-rendering: pixelated; border: 1px solid var(--line); }
+.bg-pop-row { display: flex; align-items: center; justify-content: space-between; margin-top: 3px; }
+.bg-hex { color: var(--cyan); font-size: 10px; }
 .add-pal { margin: 3px; flex: none; color: var(--muted); border-style: dashed; }
 
 /* Drag strip on a panel's bottom edge. */

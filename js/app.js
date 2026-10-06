@@ -1102,6 +1102,7 @@
     sec.className = 'panel xpal';
     sec.innerHTML =
       '<div class="panel-head"><span class="pal-title" title="Double-click to rename"></span><div class="head-btns">' +
+      '<button class="pal-bg" title="Background colour behind transparent tiles"></button>' +
       '<select title="Palette zoom"></select>' +
       '<button data-action="unselect" title="Unselect brush (Esc)">✕</button>' +
       '<button class="pal-del" title="Remove this palette">Del</button></div></div>' +
@@ -1113,13 +1114,17 @@
       o.value = z[0]; o.textContent = z[1];
       sel.appendChild(o);
     });
-    sel.value = opts.zoom || 'fit';
+    sel.value = opts.zoom || '1';
     $('palStack').appendChild(sec);
     var P = makePalette({
       section: sec, canvas: sec.querySelector('canvas'), wrap: sec.querySelector('.palette-wrap'), zoomSel: sel,
       title: sec.querySelector('.pal-title'), emptyEl: sec.querySelector('.empty')
     }, { name: opts.name || nextPaletteName(), height: opts.height || 260 });
     P.tsId = opts.ts && S.tsMap[opts.ts] ? opts.ts : null;
+    P.bg = opts.bg || null;
+    P.bgBtn = sec.querySelector('.pal-bg');
+    P.bgBtn.addEventListener('click', function (e) { e.stopPropagation(); openBgPicker(P); });
+    syncBgButton(P);
     sec.style.flexBasis = P.height + 'px';
     P.title.addEventListener('dblclick', function () {
       promptText('Rename palette', P.name).then(function (n) { if (n) { P.name = n; renderPalette(P); changed(true); } });
@@ -1142,6 +1147,7 @@
   }
 
   function removePalette(P) {
+    if (bgPick && bgPick.P === P) closeBgPicker();
     if (P.sels.length && S.brush && !S.brush.stampId) setBrush(null);
     P.ro.disconnect();
     P.section.remove();
@@ -1156,6 +1162,78 @@
     palettes = palettes.slice(0, 1);
     list.forEach(addPalette);
   }
+
+  // Palette background picker: hue runs left to right, brightness bottom to top. Saturation is fixed to
+  // that of the app's own background colour, so every choice stays in the same family.
+  function hsvToHex(h, s, v) {
+    var f = function (n) {
+      var k = (n + h / 60) % 6, c = v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+      return ('0' + Math.round(c * 255).toString(16)).slice(-2);
+    };
+    return '#' + f(5) + f(3) + f(1);
+  }
+  function hexToHsv(hex) {
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
+    if (!m) return { h: 0, s: 0, v: 0 };
+    var r = parseInt(m[1], 16) / 255, g = parseInt(m[2], 16) / 255, b = parseInt(m[3], 16) / 255;
+    var max = Math.max(r, g, b), d = max - Math.min(r, g, b), h = 0;
+    if (d) h = 60 * (max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4);
+    return { h: h, s: max ? d / max : 0, v: max };
+  }
+  function bgSaturation() { return hexToHsv(getComputedStyle(document.documentElement).getPropertyValue('--panel-2')).s; }
+
+  function syncBgButton(P) {
+    P.bgBtn.style.background = P.bg || 'transparent';
+    P.bgBtn.classList.toggle('set', !!P.bg);
+  }
+
+  var bgPick = null;
+  function openBgPicker(P) {
+    if (bgPick && bgPick.P === P) return closeBgPicker();
+    closeBgPicker();
+    var W = 180, H = 90, sat = bgSaturation();
+    var pop = document.createElement('div');
+    pop.className = 'bg-pop';
+    pop.innerHTML = '<canvas width="' + W + '" height="' + H + '"></canvas>' +
+      '<div class="bg-pop-row"><span class="bg-hex"></span><button type="button" class="bg-none">None</button></div>';
+    var pad = pop.querySelector('canvas'), g = pad.getContext('2d'), hexEl = pop.querySelector('.bg-hex');
+    function draw() {
+      for (var x = 0; x < W; x++) for (var y = 0; y < H; y++) {
+        g.fillStyle = hsvToHex(x / W * 360, sat, 1 - y / (H - 1));
+        g.fillRect(x, y, 1, 1);
+      }
+      hexEl.textContent = P.bg ? P.bg.toUpperCase() : 'NONE';
+      if (!P.bg) return;
+      var c = hexToHsv(P.bg), mx = Math.round(c.h / 360 * W) + 0.5, my = Math.round((1 - c.v) * (H - 1)) + 0.5;
+      g.strokeStyle = c.v > 0.5 ? '#000' : '#fff';
+      g.strokeRect(mx - 3, my - 3, 6, 6);
+    }
+    function setFrom(e) {
+      var r = pad.getBoundingClientRect();
+      var x = Math.max(0, Math.min(W - 1, (e.clientX - r.left) * W / r.width));
+      var y = Math.max(0, Math.min(H - 1, (e.clientY - r.top) * H / r.height));
+      P.bg = hsvToHex(x / W * 360, sat, 1 - y / (H - 1));
+      syncBgButton(P); renderPalette(P); draw();
+    }
+    var dragging = false;
+    pad.addEventListener('pointerdown', function (e) { pad.setPointerCapture(e.pointerId); dragging = true; setFrom(e); });
+    pad.addEventListener('pointermove', function (e) { if (dragging) setFrom(e); });
+    pad.addEventListener('pointerup', function () { if (dragging) { dragging = false; changed(true); } });
+    pop.querySelector('.bg-none').addEventListener('click', function () {
+      P.bg = null; syncBgButton(P); renderPalette(P); changed(true); closeBgPicker();
+    });
+    document.body.appendChild(pop);
+    var r = P.bgBtn.getBoundingClientRect();
+    pop.style.left = Math.max(4, Math.min(r.left, window.innerWidth - pop.offsetWidth - 4)) + 'px';
+    pop.style.top = Math.min(r.bottom + 3, window.innerHeight - pop.offsetHeight - 4) + 'px';
+    bgPick = { P: P, el: pop };
+    draw();
+  }
+  function closeBgPicker() { if (bgPick) { bgPick.el.remove(); bgPick = null; } }
+  document.addEventListener('mousedown', function (e) {
+    if (bgPick && !bgPick.el.contains(e.target) && e.target !== bgPick.P.bgBtn) closeBgPicker();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeBgPicker(); });
 
   // Bottom-edge drag handle; getH reads the current height, setH applies a new one.
   function makeGrip(grip, getH, setH) {
@@ -1296,7 +1374,7 @@
     pal.width = Math.max(1, Math.round(t.palCols * d));
     pal.height = Math.max(1, Math.round(t.palRows * d));
     palCtx.imageSmoothingEnabled = false;
-    palCtx.fillStyle = '#000';
+    palCtx.fillStyle = P.bg || '#000';
     palCtx.fillRect(0, 0, pal.width, pal.height);
     if (isAuto(t.type)) {
       t.kinds.forEach(function (k) {
@@ -2012,7 +2090,7 @@
       app: 'PonyTiler', version: 1,
       tileSize: S.ts, nextId: S.nextId,
       palettes: palettes.filter(function (P) { return !P.main; }).map(function (P) {
-        return { name: P.name, ts: P.tsId, height: P.height, zoom: P.zoomSel.value };
+        return { name: P.name, ts: P.tsId, height: P.height, zoom: P.zoomSel.value, bg: P.bg };
       }),
       hotkeys: S.hotkeys,
       treeH: S.treeH,
