@@ -1165,7 +1165,8 @@
   }
 
   function setBrush(b) {
-    if (S.brush && S.brush !== b) S.prevBrush = S.brush;
+    // Q returns to the last palette brush, so stamps (grabbed from the map) are never remembered.
+    if (S.brush && S.brush !== b && !S.brush.stampId) S.prevBrush = S.brush;
     S.brush = b;
     // Restore the palette highlight that belongs to this brush (stamps and "none" clear it).
     palettes.forEach(function (P, i) {
@@ -1216,6 +1217,7 @@
 
   function renderStamps() {
     var box = $('stamps');
+    if (!box) return;
     box.innerHTML = '';
     if (!S.stamps.length) {
       box.innerHTML = '<div class="empty">Right-drag on the map to save a stamp.</div>';
