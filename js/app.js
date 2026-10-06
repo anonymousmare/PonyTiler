@@ -411,7 +411,7 @@
     for (var y = 0; y < b.h; y++) {
       for (var x = 0; x < b.w; x++) {
         var c = b.cells[y * b.w + x];
-        if (c) setCell(layer, tlx + x, tly + y, c);
+        if (c || b.empty) setCell(layer, tlx + x, tly + y, c);
       }
     }
   }
@@ -479,7 +479,7 @@
       if (erase) setCell(layer, x, y, null);
       else {
         var c = patternCell(x, y, p.x, p.y);
-        if (c) setCell(layer, x, y, c);
+        if (c || S.brush.empty) setCell(layer, x, y, c);
       }
     });
     endStroke();
@@ -496,7 +496,7 @@
         if (erase) setCell(layer, x, y, null);
         else {
           var c = patternCell(x, y, x0, y0);
-          if (c) setCell(layer, x, y, c);
+          if (c || S.brush.empty) setCell(layer, x, y, c);
         }
       }
     }
@@ -779,7 +779,8 @@
         }
         ctx.globalAlpha = 1;
       }
-      outline(ox + x0 * d, oy + y0 * d, w * d, h * d, drag.erase ? '#ff6b6b' : '#ffffff');
+      var clears = drag.erase || (S.brush && S.brush.empty);
+      outline(ox + x0 * d, oy + y0 * d, w * d, h * d, clears ? '#ff6b6b' : '#ffffff');
       return;
     }
     var p = S.hover;
@@ -794,8 +795,8 @@
         if (cc) drawCellTo(ctx, cc, ox + (tlx + x) * d, oy + (tly + y) * d, S.zoom, noSame);
       }
       ctx.globalAlpha = 1;
-      outline(ox + tlx * d, oy + tly * d, b.w * d, b.h * d, '#ffffff');
-      if (activeLayer() && isAccessoryLayer(activeLayer()) && !b.cells.some(function (c) { return c && c.d !== undefined; })) {
+      outline(ox + tlx * d, oy + tly * d, b.w * d, b.h * d, b.empty ? '#ff6b6b' : '#ffffff');
+      if (!b.empty && activeLayer() && isAccessoryLayer(activeLayer()) && !b.cells.some(function (c) { return c && c.d !== undefined; })) {
         drawArrow(ox + (tlx + b.w / 2) * d, oy + (tly + b.h / 2) * d, Math.max(6, Math.min(18, d * 0.35)), S.accDir, '#ffd166');
       }
     } else {
@@ -1194,19 +1195,20 @@
   function captureStamp(r) {
     var layer = activeLayer(), cells = [];
     for (var y = 0; y < r.h; y++) for (var x = 0; x < r.w; x++) cells.push(layer.cells[(r.y + y) * S.map.w + r.x + x] || null);
-    if (!cells.some(Boolean)) return flash('Nothing on layer "' + layer.name + '" there');
     var st = { id: uid('s'), w: r.w, h: r.h, cells: cells };
     S.stamps.unshift(st);
     if (S.stamps.length > MAX_STAMPS) S.stamps.length = MAX_STAMPS;
     useStamp(st);
     if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
-    flash('Saved a ' + r.w + '×' + r.h + ' stamp');
+    flash('Saved a ' + r.w + '×' + r.h + (cells.some(Boolean) ? ' stamp' : ' empty stamp (paints emptiness)'));
     changed();
   }
 
   function useStamp(st) {
     var first = st.cells.find(Boolean), t = first && S.tsMap[first.t];
-    var b = makeBrush(st.w, st.h, st.cells, t ? t.name : '?', t ? t.type : 'normal');
+    // A fully empty stamp still makes a brush: it paints emptiness over its footprint.
+    var b = first ? makeBrush(st.w, st.h, st.cells, t ? t.name : '?', t ? t.type : 'normal') :
+      { w: st.w, h: st.h, cells: st.cells, name: 'empty', type: 'normal', pool: [], empty: true };
     if (!b) return;
     b.stampId = st.id;
     setBrush(b);
@@ -1222,7 +1224,7 @@
     S.stamps.forEach(function (st) {
       var el = document.createElement('div');
       el.className = 'stamp' + (S.brush && S.brush.stampId === st.id ? ' active' : '');
-      el.title = st.w + '×' + st.h + ' stamp';
+      el.title = st.w + '×' + st.h + (st.cells.some(Boolean) ? ' stamp' : ' empty stamp');
       var z = Math.min(48 / (st.w * S.ts), 48 / (st.h * S.ts));
       var c = makeCanvas(Math.round(st.w * S.ts * z), Math.round(st.h * S.ts * z)), g = c.getContext('2d');
       g.imageSmoothingEnabled = false;
@@ -1230,6 +1232,7 @@
         var cell = st.cells[y * st.w + x];
         if (cell) drawCellTo(g, cell, x * S.ts * z, y * S.ts * z, z, noSame);
       }
+      if (!st.cells.some(Boolean)) { g.strokeStyle = '#ff6b6b'; g.setLineDash([3, 3]); g.strokeRect(0.5, 0.5, c.width - 1, c.height - 1); }
       el.appendChild(c);
       el.appendChild(actBtn('✕', 'Delete stamp', function () {
         S.stamps = S.stamps.filter(function (x) { return x !== st; });
