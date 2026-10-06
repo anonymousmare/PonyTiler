@@ -1391,8 +1391,67 @@
     n.append(icon, name, tag, acts);
     n.addEventListener('click', function () { selectTileset(t.id); });
     n.addEventListener('dblclick', function (e) { e.preventDefault(); renameTileset(t); });
+    n.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      selectTileset(t.id);
+      showContextMenu(e.clientX, e.clientY, [
+        ['Replace image…', function () { replaceTilesetImage(t); }],
+        ['Rename…', function () { renameTileset(t); }],
+        ['Settings…', function () { editTileset(t); }],
+        ['Delete', function () { deleteTileset(t); }]
+      ]);
+    });
     return n;
   }
+
+  // Small right-click menu; items are [label, fn] pairs.
+  function showContextMenu(x, y, items) {
+    var m = $('ctxMenu');
+    m.innerHTML = '';
+    items.forEach(function (it) {
+      var b = document.createElement('button');
+      b.textContent = it[0];
+      b.addEventListener('click', function () { hideContextMenu(); it[1](); });
+      m.appendChild(b);
+    });
+    m.hidden = false;
+    m.style.left = Math.min(x, window.innerWidth - m.offsetWidth - 4) + 'px';
+    m.style.top = Math.min(y, window.innerHeight - m.offsetHeight - 4) + 'px';
+  }
+
+  function hideContextMenu() { $('ctxMenu').hidden = true; }
+
+  document.addEventListener('mousedown', function (e) { if (!$('ctxMenu').contains(e.target)) hideContextMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideContextMenu(); });
+  window.addEventListener('blur', hideContextMenu);
+  window.addEventListener('resize', hideContextMenu);
+
+  // Swaps a tileset's source image in place, so tiles already on the map pick up the new art.
+  var replaceTarget = null;
+  function replaceTilesetImage(t) {
+    replaceTarget = t;
+    $('fileReplace').click();
+  }
+
+  $('fileReplace').addEventListener('change', function () {
+    var file = this.files[0], t = replaceTarget;
+    this.value = '';
+    replaceTarget = null;
+    if (!file || !t || S.tsMap[t.id] !== t) return;
+    readFileAsDataURL(file).then(function (src) {
+      return loadImage(src).then(function (img) {
+        var oldCols = t.cols, oldRows = t.rows;
+        t.src = src; t.srcImg = img;
+        processTileset(t);
+        S.map.layers.forEach(function (l) {
+          l.cells.forEach(function (c, i) { if (c && c.t === t.id) l.dirty.add(i); });
+        });
+        if (t.cols !== oldCols || t.rows !== oldRows) palettes.forEach(function (P) { if (P.tsId === t.id) P.sels = []; });
+        renderTree(); renderPalettes(); renderStamps(); requestRender(); changed();
+        flash('Replaced image of "' + t.name + '"');
+      });
+    }).catch(function (err) { alert('Replace failed: ' + err.message); });
+  });
 
   function renameTileset(t) {
     promptText('Rename tileset', t.name).then(function (name) {
