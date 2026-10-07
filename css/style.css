@@ -84,6 +84,10 @@ input::placeholder { color: var(--muted); }
 }
 #toolbar .group { display: flex; gap: 2px; align-items: center; padding-right: 6px; border-right: 1px solid var(--line); }
 #toolbar .spacer { flex: 1; }
+/* Vertical segmented level meter; segments light from the bottom up. */
+.seg-bar { display: flex; flex-direction: column-reverse; gap: 1px; width: 8px; height: 16px; padding: 2px 0; border: none; cursor: ns-resize; outline: none; }
+.seg-bar i { flex: 1; background: var(--line); }
+.seg-bar i.on { background: var(--text); }
 
 details.menu { position: relative; }
 details.menu summary { list-style: none; }
