@@ -27,7 +27,7 @@
     tool: 'brush',
     dice: false,
     zoom: 1, ox: 0, oy: 0,
-    grid: true, dim: false, axes: true,
+    grid: true, gridLevel: 1, dim: false, axes: true,  // gridLevel: lit segments of the grid opacity bar
     hover: null,
     hotkeys: {},     // letter -> { t: tileset id, x0, y0, x1, y1 } in palette grid cells
     palHover: null,  // { P, x, y } while the pointer is over a palette
@@ -577,12 +577,12 @@
     ctx.globalAlpha = 1;
     if (S.tool === 'wall') drawWalls(ox, oy, d);
 
-    if (S.grid && d >= 6) {
+    if (S.grid && S.gridLevel && d >= 6) {
       ctx.beginPath();
       var px = 1 / dpr;
       for (var x = 0; x <= S.map.w; x++) { var gx = ox + x * d; ctx.rect(gx, oy, px, mh); }
       for (var y = 0; y <= S.map.h; y++) { var gy = oy + y * d; ctx.rect(ox, gy, mw, px); }
-      ctx.fillStyle = 'rgba(98,214,255,0.16)';
+      ctx.fillStyle = 'rgba(98,214,255,' + S.gridLevel / GRID_SEGS + ')';
       ctx.fill();
     }
     ctx.strokeStyle = '#f2ee4a';
@@ -2441,6 +2441,34 @@
     syncToolButtons();
     requestRender();
   }
+
+  // Grid opacity bar: N segments, all lit = 100%, none = 0%.
+  var GRID_SEGS = 5;
+  function setGridLevel(n) {
+    S.gridLevel = Math.max(0, Math.min(GRID_SEGS, n));
+    var bar = $('gridOpacity');
+    Array.prototype.forEach.call(bar.children, function (seg, i) { seg.classList.toggle('on', i < S.gridLevel); });
+    bar.setAttribute('aria-valuenow', Math.round(S.gridLevel / GRID_SEGS * 100));
+    bar.title = 'Grid opacity ' + Math.round(S.gridLevel / GRID_SEGS * 100) + '% — click or drag, scroll to step';
+    requestRender();
+  }
+  (function () {
+    var bar = $('gridOpacity');
+    function fromY(e) {
+      var r = bar.getBoundingClientRect();
+      setGridLevel(Math.round((r.bottom - e.clientY) / r.height * GRID_SEGS));
+    }
+    bar.addEventListener('pointerdown', function (e) { bar.setPointerCapture(e.pointerId); fromY(e); });
+    bar.addEventListener('pointermove', function (e) { if (bar.hasPointerCapture(e.pointerId)) fromY(e); });
+    bar.addEventListener('wheel', function (e) { e.preventDefault(); setGridLevel(S.gridLevel + (e.deltaY < 0 ? 1 : -1)); }, { passive: false });
+    bar.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') setGridLevel(S.gridLevel + 1);
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') setGridLevel(S.gridLevel - 1);
+      else return;
+      e.preventDefault(); e.stopPropagation();
+    });
+    setGridLevel(S.gridLevel);
+  })();
 
   function syncToolButtons() {
     document.querySelectorAll('[data-tool]').forEach(function (b) { b.classList.toggle('active', b.dataset.tool === S.tool); });
