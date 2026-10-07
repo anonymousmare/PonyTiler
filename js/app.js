@@ -188,9 +188,10 @@
   // ---------------------------------------------------------------------------
   // Layers & cells
   // ---------------------------------------------------------------------------
+  var DEFAULT_HUE = 128;
   function newLayer(name) {
     return {
-      id: uid('l'), name: name, visible: true, locked: false, opacity: 1,
+      id: uid('l'), name: name, visible: true, locked: false, opacity: 1, hue: DEFAULT_HUE,
       cells: new Array(S.map.w * S.map.h).fill(null), canvas: null, dirty: new Set()
     };
   }
@@ -338,7 +339,7 @@
     return {
       w: S.map.w, h: S.map.h, active: S.active, walls: S.walls.cells.slice(),
       layers: S.map.layers.map(function (l) {
-        return { id: l.id, name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity, cells: l.cells.slice() };
+        return { id: l.id, name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity, hue: l.hue, cells: l.cells.slice() };
       })
     };
   }
@@ -350,7 +351,7 @@
     S.map.layers.forEach(function (l) { byId[l.id] = l; });
     S.map.layers = snap.layers.map(function (s) {
       var l = byId[s.id] || { id: s.id, dirty: new Set() };
-      l.name = s.name; l.visible = s.visible; l.locked = s.locked; l.opacity = s.opacity;
+      l.name = s.name; l.visible = s.visible; l.locked = s.locked; l.opacity = s.opacity; l.hue = s.hue;
       l.cells = s.cells.slice();
       return l;
     });
@@ -691,7 +692,7 @@
         if (x % sx && x !== hx) continue;
         var cx = ox + (x + 0.5) * d;
         if (cx < x0 || cx > x1) continue;
-        ctx.fillStyle = x === hx ? '#ff3bf0' : '#3f9a55';
+        ctx.fillStyle = x === hx ? '#ff3bf0' : uiMuted;
         ctx.fillText(String(x), cx, ty + th / 2);
       }
     }
@@ -705,7 +706,7 @@
         if (y % sy && y !== hy) continue;
         var cy = oy + (y + 0.5) * d;
         if (cy < y0 || cy > y1) continue;
-        ctx.fillStyle = y === hy ? '#ff3bf0' : '#3f9a55';
+        ctx.fillStyle = y === hy ? '#ff3bf0' : uiMuted;
         ctx.fillText(String(y), lx + lw / 2, cy);
       }
     }
@@ -1986,6 +1987,17 @@
     var l = activeLayer();
     $('layerOpacity').value = l ? Math.round(l.opacity * 100) : 100;
     $('layerOpacityVal').textContent = $('layerOpacity').value + '%';
+    $('layerHue').value = l ? l.hue : DEFAULT_HUE;
+    applyUiHue();
+  }
+
+  // The UI's phosphor colours (see --hue in style.css) follow the active layer's colour.
+  var uiMuted = 'hsl(134,41.9%,42.5%)';
+  function applyUiHue() {
+    var l = activeLayer(), hue = l ? l.hue : DEFAULT_HUE;
+    document.documentElement.style.setProperty('--hue', hue);
+    uiMuted = 'hsl(' + (hue + 6) + ',41.9%,42.5%)';
+    requestRender();
   }
 
   function layerRow(l, i) {
@@ -1999,9 +2011,11 @@
     lock.className = 'tog' + (l.locked ? '' : ' off');
     lock.textContent = 'L'; lock.title = 'Lock/unlock';
     lock.addEventListener('click', function (e) { e.stopPropagation(); l.locked = !l.locked; renderLayers(); changed(); });
+    var hue = document.createElement('span');
+    hue.className = 'hue'; hue.style.background = 'hsl(' + l.hue + ',100%,74.5%)';
     var name = document.createElement('span');
     name.className = 'name'; name.textContent = l.name;
-    row.append(eye, lock, name);
+    row.append(eye, lock, hue, name);
     row.addEventListener('click', function (e) {
       S.active = i; renderLayers(); requestRender();
       // The rows are rebuilt on every click, so a double-click is caught here instead of via 'dblclick'.
@@ -2039,6 +2053,16 @@
     changed();
   });
 
+  $('layerHue').addEventListener('input', function () {
+    var l = activeLayer();
+    if (!l) return;
+    l.hue = parseInt(this.value, 10);
+    var sw = $('layers').querySelector('.layer.active .hue');
+    if (sw) sw.style.background = 'hsl(' + l.hue + ',100%,74.5%)';
+    applyUiHue();
+    changed();
+  });
+
   function addLayer() {
     structural(function () {
       var l = newLayer('Layer ' + (S.map.layers.length + 1));
@@ -2067,7 +2091,7 @@
     if (!src) return;
     structural(function () {
       var l = newLayer(src.name + ' copy');
-      l.cells = src.cells.slice(); l.opacity = src.opacity; l.visible = src.visible;
+      l.cells = src.cells.slice(); l.opacity = src.opacity; l.visible = src.visible; l.hue = src.hue;
       rebuildLayerCanvas(l);
       S.map.layers.splice(S.active + 1, 0, l);
       S.active++;
@@ -2127,7 +2151,7 @@
             if (keyIdx[key] === undefined) { uniq.push(c); keyIdx[key] = uniq.length; }
             data[i] = keyIdx[key];
           }
-          return { id: l.id, name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity, tiles: uniq, data: data };
+          return { id: l.id, name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity, hue: l.hue, tiles: uniq, data: data };
         })
       }
     };
@@ -2152,7 +2176,7 @@
           return o;
         });
         var cells = l.data.map(function (v) { return v ? tiles[v - 1] : null; });
-        return { id: l.id, name: l.name, visible: l.visible !== false, locked: !!l.locked, opacity: l.opacity === undefined ? 1 : l.opacity, cells: cells, dirty: new Set() };
+        return { id: l.id, name: l.name, visible: l.visible !== false, locked: !!l.locked, opacity: l.opacity === undefined ? 1 : l.opacity, hue: typeof l.hue === 'number' ? l.hue : DEFAULT_HUE, cells: cells, dirty: new Set() };
       });
       S.active = Math.min(p.map.active || 0, S.map.layers.length - 1);
       S.stamps = (p.stamps || []).slice(0, MAX_STAMPS).map(function (st) { return { id: uid('s'), w: st.w, h: st.h, cells: st.cells }; });
@@ -2365,7 +2389,7 @@
 
   function exportDialog(mode) {
     var walls = mode === 'walls';
-    if (walls && !S.walls.cells.some(Boolean)) return flash('No walls yet — pick the Wall tool (V) and paint some');
+    if (walls && !S.walls.cells.some(Boolean)) return flash('No walls yet — pick the Wall tool (T) and paint some');
     if (!$('exCustomW').value) $('exCustomW').value = S.map.w * S.ts * 2;
     $('exTitle').textContent = walls ? 'Export walls PNG' : 'Export PNG';
     $('exHiddenRow').hidden = $('exBgRow').hidden = walls;
@@ -2546,12 +2570,13 @@
       if (!spaceDown) { spaceDown = true; if (!drag) canvas.style.cursor = 'grab'; }
       return;
     }
-    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', v: 'wall', b: 'brush', i: 'picker' };
+    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', t: 'wall', b: 'brush', i: 'picker' };
     if (map[k]) return setTool(map[k]);
     if (k === 'q') return swapBrush();
     if (k === 'g') return actions.grid();
     if (k === 'x') return actions.axes();
     if (k === 'l' || k === 'r') return actions.dim();
+    if (k === 'c' || k === 'v') return switchLayer(k === 'c' ? 1 : -1);
     if (drag && (e.key === 'Escape' || e.key === 'Delete' || e.key === 'Backspace')) return;
     if (e.key === 'Escape') {
       if (S.marquee) { S.marquee = null; requestRender(); } else setBrush(null);
@@ -2563,11 +2588,14 @@
     if (e.key === '+' || e.key === '=') return stepZoom(1);
     if (e.key === '-') return stepZoom(-1);
     if (e.key === '0') return fitView();
-    if (e.key === '[' || e.key === ']') {
-      S.active = Math.max(0, Math.min(S.map.layers.length - 1, S.active + (e.key === ']' ? 1 : -1)));
-      renderLayers(); requestRender();
-    }
+    if (e.key === '[' || e.key === ']') switchLayer(e.key === ']' ? 1 : -1);
   });
+
+  // +1 is the layer above (higher in the Layers panel), -1 the one below.
+  function switchLayer(dir) {
+    S.active = Math.max(0, Math.min(S.map.layers.length - 1, S.active + dir));
+    renderLayers(); requestRender();
+  }
   document.addEventListener('keyup', function (e) {
     if (e.key === ' ') { spaceDown = false; if (!drag) canvas.style.cursor = ''; }
   });

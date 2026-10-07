@@ -26,7 +26,7 @@
     <button data-tool="rect" title="Rectangle fill (D)">▭ Rect</button>
     <button data-tool="picker" title="Eyedropper (F) — or Alt+click">⌖ Pick</button>
     <button data-tool="select" title="Select &amp; move (E) — drag inside the selection to move it, Del to clear, Ctrl+C to make a stamp">⬚ Select</button>
-    <button data-tool="wall" title="Walls (V): left-drag marks wall tiles, right-drag clears, Shift+drag for a rectangle. Walls only show while this tool is active.">▦ Wall</button>
+    <button data-tool="wall" title="Walls (T): left-drag marks wall tiles, right-drag clears, Shift+drag for a rectangle. Walls only show while this tool is active.">▦ Wall</button>
     <button data-action="dice" id="btnDice" title="Dice: paint a random tile from everything selected (Ctrl/Shift+drag in a palette to add more)">⁘ Dice</button>
   </div>
   <div class="group">
@@ -100,6 +100,7 @@
       </div>
       <div id="layers"></div>
       <label class="row">Opacity <input type="range" id="layerOpacity" min="0" max="100" value="100"> <span id="layerOpacityVal">100%</span></label>
+      <label class="row" title="Layer colour: the whole UI takes this hue while the layer is active">Colour <input type="range" id="layerHue" min="0" max="359" value="128"> <span id="layerHueVal"></span></label>
     </section>
     <div id="palStack"></div>
     <button data-action="addPalette" class="add-pal" title="Add another palette">+ Add palette</button>
@@ -247,7 +248,7 @@
       <tr><td>Fit / 100% and centre</td><td><kbd>0</kbd> / <kbd>Ctrl</kbd>+<kbd>0</kbd></td></tr>
       <tr><td>Brush · eraser · fill · rect · pick · select</td><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>E</kbd></td></tr>
       <tr><td>Wall decoration facing (↑ = seen from below)</td><td><kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> <kbd>←</kbd></td></tr>
-      <tr><td>Wall tool: mark · clear · rectangle</td><td><kbd>V</kbd> · left drag · right drag · <kbd>Shift</kbd>+drag</td></tr>
+      <tr><td>Wall tool: mark · clear · rectangle</td><td><kbd>T</kbd> · left drag · right drag · <kbd>Shift</kbd>+drag</td></tr>
       <tr><td>Previous brush</td><td><kbd>Q</kbd></td></tr>
       <tr><td>Bind tile (or the selection under the pointer) to a hotkey</td><td>hover a palette · <kbd>Ctrl</kbd>+letter (again to unbind)</td></tr>
       <tr><td>Use a hotkey</td><td><kbd>Ctrl</kbd>+letter with the pointer off the palettes</td></tr>
@@ -255,7 +256,7 @@
       <tr><td>Add to palette selection</td><td><kbd>Ctrl</kbd>/<kbd>Shift</kbd> + drag in a palette</td></tr>
       <tr><td>Selection: move · clear · make stamp</td><td>drag inside · <kbd>Del</kbd> · <kbd>Ctrl</kbd>+<kbd>C</kbd></td></tr>
       <tr><td>Grid · axes · focus layer</td><td><kbd>G</kbd> <kbd>X</kbd> <kbd>R</kbd>/<kbd>L</kbd></td></tr>
-      <tr><td>Switch layer</td><td><kbd>[</kbd> <kbd>]</kbd></td></tr>
+      <tr><td>Layer up / down</td><td><kbd>C</kbd> / <kbd>V</kbd> (or <kbd>]</kbd> / <kbd>[</kbd>)</td></tr>
       <tr><td>Rename tileset</td><td>double-click it</td></tr>
       <tr><td>Load tileset into an extra palette</td><td>drag it from the list onto the palette</td></tr>
       <tr><td>Rename layer · palette</td><td>double-click it · double-click its title</td></tr>
