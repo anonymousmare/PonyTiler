@@ -196,14 +196,7 @@ aside { width: 340px; display: flex; flex-direction: column; background: var(--p
 .layer .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layer .tog { border: 1px solid var(--line-hi); padding: 0; width: 13px; height: 13px; font-size: 9px; color: var(--cyan); }
 .layer .tog.off { opacity: .3; color: var(--muted); }
-.layer .hue { flex: 0 0 auto; width: 7px; height: 13px; }
-#layerHue {
-  -webkit-appearance: none; appearance: none; height: 9px; border: 1px solid var(--line-hi);
-  background: linear-gradient(to right, hsl(0,100%,74.5%), hsl(60,100%,74.5%), hsl(120,100%,74.5%), hsl(180,100%,74.5%), hsl(240,100%,74.5%), hsl(300,100%,74.5%), hsl(360,100%,74.5%));
-}
-#layerHue::-webkit-slider-thumb { -webkit-appearance: none; width: 5px; height: 13px; background: #000; border: 1px solid #fff; }
-#layerHue::-moz-range-thumb { width: 3px; height: 11px; background: #000; border: 1px solid #fff; }
-#layerHueVal { width: 9px; height: 9px; flex: 0 0 auto; background: var(--text); }
+.bg-pop canvas.hue-strip { height: 16px; cursor: ew-resize; }
 .layer.dragover { outline: 1px dashed var(--cyan); }
 
 .row { display: flex; align-items: center; gap: 6px; padding: 2px 6px; }

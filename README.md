@@ -9,7 +9,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 - **RPG Maker MV images**: A1 (water/waterfalls), A2 (ground), A3 (buildings) and A4 (walls) work as real **autotiles** that join up with their neighbours. A5 and B–E sheets, or any other sprite sheet, work as normal tiles.
 - **Any tile size** (default **32×32**). MV's 48 px sheets are detected from the file name (`Outside_A2.png`, `Inside_B.png`, …) and rescaled to your tile size on import.
 - **Folders**: sort tilesets into nested folders by drag-and-drop. You can rename, filter and delete them.
-- **Layers**: add, duplicate, delete, reorder (drag or ▲▼), show/hide, lock, opacity, and "Focus layer" to dim the others. Each layer has a **colour** (hue slider under Opacity); the whole UI switches to that colour while the layer is active, so you always know which layer you're on.
+- **Layers**: add, duplicate, delete, reorder (drag or ▲▼), show/hide, lock, opacity, and "Focus layer" to dim the others. Each layer has a **colour** (click the round button next to its name and pick a hue); the whole UI switches to that colour while the layer is active, so you always know which layer you're on.
 - **Tools**: brush (drag in the palette to grab multi-tile objects), eraser, bucket fill, rectangle fill, eyedropper, select & move, undo/redo.
 - **Two palettes**: the left one shows the tileset picked in the list. Drag any tileset onto the right one to keep a second sheet open.
 - **Dice**: paints a random tile from everything you've selected. Ctrl/Shift+drag in either palette adds more tiles to the mix, which is handy for sprinkling grass.
