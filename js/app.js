@@ -2546,12 +2546,12 @@
       if (!spaceDown) { spaceDown = true; if (!drag) canvas.style.cursor = 'grab'; }
       return;
     }
-    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', v: 'wall', b: 'brush', r: 'rect', i: 'picker' };
+    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', v: 'wall', b: 'brush', i: 'picker' };
     if (map[k]) return setTool(map[k]);
     if (k === 'q') return swapBrush();
     if (k === 'g') return actions.grid();
     if (k === 'x') return actions.axes();
-    if (k === 'l') return actions.dim();
+    if (k === 'l' || k === 'r') return actions.dim();
     if (drag && (e.key === 'Escape' || e.key === 'Delete' || e.key === 'Backspace')) return;
     if (e.key === 'Escape') {
       if (S.marquee) { S.marquee = null; requestRender(); } else setBrush(null);
