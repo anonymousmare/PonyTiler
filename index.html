@@ -230,11 +230,13 @@
     <label class="row" id="exHiddenRow"><input id="exHidden" type="checkbox"> Include hidden layers</label>
     <label class="row" id="exBgRow"><input id="exBgOn" type="checkbox"> Background colour <input id="exBg" type="color" value="#000000"></label>
     <label class="row">File name <input id="exName" value="map"></label>
+    <label class="row" id="exPickRow"><input id="exPick" type="checkbox"> Choose where to save</label>
+    <p id="exPickNote" class="muted" hidden>This browser saves to its downloads folder. To pick a folder each time, turn on "Always ask where to save files" in the browser's settings.</p>
     <p id="exSize" class="muted"></p>
     <p id="exWarn" class="warn" hidden>Non-whole-number scale — pixels can't stay perfectly square. Pick a whole number for crisp output.</p>
     <div class="dlg-btns">
       <button value="cancel">Cancel</button>
-      <button value="ok" class="accent">Download PNG</button>
+      <button value="ok" class="accent" id="exGo">Download PNG</button>
     </div>
   </form>
 </dialog>

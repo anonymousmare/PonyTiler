@@ -2609,6 +2609,50 @@
     g.drawImage(c, 0, 0, w, h);
   }
 
+  // "Choose where to save" uses the browser's save dialog (Chrome/Edge). Other browsers always download,
+  // so the option is swapped for a hint about their own "ask where to save" setting.
+  var canPickSave = typeof window.showSaveFilePicker === 'function';
+  $('exPickRow').hidden = !canPickSave;
+  $('exPickNote').hidden = canPickSave;
+  try { $('exPick').checked = localStorage.getItem('ponytiler.exportPick') === '1'; } catch (e) { /* storage blocked */ }
+  function updateExportButton() { $('exGo').textContent = canPickSave && $('exPick').checked ? 'Save PNG…' : 'Download PNG'; }
+  $('exPick').addEventListener('change', function () {
+    try { localStorage.setItem('ponytiler.exportPick', $('exPick').checked ? '1' : '0'); } catch (e) { /* not remembered */ }
+    updateExportButton();
+  });
+  updateExportButton();
+
+  // Resolves to a file handle, null to fall back to a normal download, or false when the user cancelled.
+  // The id makes the browser reopen the folder used last time.
+  function pickSaveFile(name) {
+    if (!canPickSave || !$('exPick').checked) return Promise.resolve(null);
+    return window.showSaveFilePicker({
+      id: 'ponytiler-export',
+      suggestedName: name,
+      types: [{ description: 'PNG image', accept: { 'image/png': ['.png'] } }]
+    }).catch(function (e) {
+      if (e && e.name === 'AbortError') return false;
+      flash('Could not open the save dialog — downloading instead');
+      return null;
+    });
+  }
+
+  function saveBlob(handle, blob, name) {
+    if (!handle) { download(blob, name); return Promise.resolve(name); }
+    return handle.createWritable().then(function (w) {
+      return w.write(blob).then(function () { return w.close(); });
+    }).then(function () { return handle.name; });
+  }
+
+  function canvasBlob(c) {
+    return new Promise(function (resolve, reject) {
+      c.toBlob(function (blob) {
+        if (blob) resolve(blob);
+        else reject(new Error('the image is probably too large for this browser. Try a smaller scale.'));
+      }, 'image/png');
+    });
+  }
+
   function exportDialog(mode) {
     var walls = mode === 'walls';
     if (walls && !S.walls.cells.some(Boolean)) return flash('No walls yet — pick the Wall tool (T) and paint some');
@@ -2619,37 +2663,35 @@
     updateExportInfo();
     showDialog($('dlgExport')).then(function (ok) {
       if (!ok) return;
-      flushDirty();
-      var s = exportScale();
-      var w = Math.round(S.map.w * S.ts * s), h = Math.round(S.map.h * S.ts * s);
-      var out = makeCanvas(w, h), g = out.getContext('2d');
-      g.imageSmoothingEnabled = false;
-      var base = ($('exName').value || 'map').replace(/[^\w\-. ]+/g, '_');
-      if (walls) {
-        drawWallMask(g, w, h);
-        var meta = JSON.stringify({ app: 'PonyTiler', kind: 'walls', cols: S.map.w, rows: S.map.h, tileSize: S.ts });
-        out.toBlob(function (blob) {
-          if (!blob) return alert('Export failed — the image is probably too large for this browser. Try a smaller scale.');
-          blob.arrayBuffer().then(function (buf) {
-            download(pngWithText(buf, 'ponytiler', meta), base + '-walls.png');
-            flash('Exported ' + w + '×' + h + ' walls PNG');
+      var name = ($('exName').value || 'map').replace(/[^\w\-. ]+/g, '_') + (walls ? '-walls.png' : '.png');
+      // Ask for the location first, while the click still counts as a user gesture.
+      return pickSaveFile(name).then(function (handle) {
+        if (handle === false) return;
+        flushDirty();
+        var s = exportScale();
+        var w = Math.round(S.map.w * S.ts * s), h = Math.round(S.map.h * S.ts * s);
+        var out = makeCanvas(w, h), g = out.getContext('2d');
+        g.imageSmoothingEnabled = false;
+        var blob;
+        if (walls) {
+          drawWallMask(g, w, h);
+          var meta = JSON.stringify({ app: 'PonyTiler', kind: 'walls', cols: S.map.w, rows: S.map.h, tileSize: S.ts });
+          blob = canvasBlob(out).then(function (b) { return b.arrayBuffer(); }).then(function (buf) { return pngWithText(buf, 'ponytiler', meta); });
+        } else {
+          if ($('exBgOn').checked) { g.fillStyle = $('exBg').value; g.fillRect(0, 0, w, h); }
+          var hidden = $('exHidden').checked;
+          S.map.layers.forEach(function (l) {
+            if (!l.visible && !hidden) return;
+            g.globalAlpha = l.opacity;
+            g.drawImage(l.canvas, 0, 0, w, h);
           });
-        }, 'image/png');
-        return;
-      }
-      if ($('exBgOn').checked) { g.fillStyle = $('exBg').value; g.fillRect(0, 0, w, h); }
-      var hidden = $('exHidden').checked;
-      S.map.layers.forEach(function (l) {
-        if (!l.visible && !hidden) return;
-        g.globalAlpha = l.opacity;
-        g.drawImage(l.canvas, 0, 0, w, h);
+          blob = canvasBlob(out);
+        }
+        return blob.then(function (b) { return saveBlob(handle, b, name); }).then(function (saved) {
+          flash('Exported ' + w + '×' + h + (walls ? ' walls PNG' : ' PNG') + (handle ? ' as ' + saved : ''));
+        });
       });
-      out.toBlob(function (blob) {
-        if (!blob) return alert('Export failed — the image is probably too large for this browser. Try a smaller scale.');
-        download(blob, base + '.png');
-        flash('Exported ' + w + '×' + h + ' PNG');
-      }, 'image/png');
-    });
+    }).catch(function (e) { alert('Export failed — ' + e.message); });
   }
 
   // Which way new wall decorations face. With a selection on the WALLACCESSORY layer, the
