@@ -96,17 +96,28 @@ async function run(tile) {
   const opt = await askOptions(guessCols, guessRows, !!img.meta);
   if (!opt || !(opt.cols > 0) || !(opt.rows > 0)) return;
 
-  // Red at the middle of each tile = wall (255) or outwall (128, edges only). Every green pixel is part
-  // of a decoration, and its blue value says which way it faces (0 ↑, 64 →, 128 ↓, 192 ←).
+  // Red at the middle of each tile = wall (255) or outwall (128, edges only). A tile with no red in the
+  // middle but a red strip along some of its sides is a side outwall: an edge wall on those sides only.
+  // Every green pixel is part of a decoration, and its blue value says which way it faces (0 ↑, 64 →, 128 ↓, 192 ←).
   const { cols, rows } = opt;
   const wall = new Uint8Array(cols * rows);
+  const redAt = (fx, fy) => {
+    const px = Math.min(img.w - 1, Math.floor(fx * img.w / cols));
+    const py = Math.min(img.h - 1, Math.floor(fy * img.h / rows));
+    const o = (py * img.w + px) * 4;
+    return img.data[o + 3] >= 128 ? img.data[o] : 0;
+  };
+  const SIDE = [[0.5, 1 / 16], [15 / 16, 0.5], [0.5, 15 / 16], [1 / 16, 0.5]];
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
-      const px = Math.min(img.w - 1, Math.floor((x + 0.5) * img.w / cols));
-      const py = Math.min(img.h - 1, Math.floor((y + 0.5) * img.h / rows));
-      const o = (py * img.w + px) * 4;
-      const r = img.data[o + 3] >= 128 ? img.data[o] : 0;
-      wall[y * cols + x] = r >= 192 ? 1 : r >= 64 ? 2 : 0;
+      const r = redAt(x + 0.5, y + 0.5);
+      let v = r >= 192 ? 1 : r >= 64 ? 2 : 0;
+      if (!v) {
+        let m = 0;
+        SIDE.forEach((s, d) => { if (redAt(x + s[0], y + s[1]) >= 64) m |= 1 << d; });
+        if (m) v = 16 + m;
+      }
+      wall[y * cols + x] = v;
     }
   }
   const W = cols * SUB, H = rows * SUB, acc = new Uint8Array(W * H);

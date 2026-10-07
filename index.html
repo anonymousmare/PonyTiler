@@ -29,7 +29,7 @@
     <button data-tool="picker" title="Eyedropper (F) — or Alt+click">⌖ Pick</button>
     <button data-tool="select" title="Select &amp; move (E) — drag inside the selection to move it, Del to clear, Ctrl+C to make a stamp">⬚ Select</button>
     <button data-tool="wall" title="Walls (T): left-drag marks wall tiles, right-drag clears, Shift+drag for a rectangle. Walls only show while this tool is active.">▦ Wall</button>
-    <button data-action="outwall" id="btnOutwall" hidden title="Outwall (T again): paint tiles whose outline becomes walls you bump into but can see through — no sight-blocking core inside">▢ Outwall</button>
+    <button data-action="outwall" id="btnOutwall" hidden title="Outwall (T again): paint tiles whose outline becomes walls you bump into but can see through — no sight-blocking core inside. While it is on, W A S D put the outwall on one side of the tile only, Space goes back to the whole outline">▢ Outwall</button>
     <button data-action="dice" id="btnDice" title="Dice: paint a random tile from everything selected (Ctrl/Shift+drag in a palette to add more)">⁘ Dice</button>
   </div>
   <div class="group">
@@ -268,6 +268,7 @@
       <tr><td>Wall decoration facing (↑ = seen from below)</td><td><kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> <kbd>←</kbd></td></tr>
       <tr><td>Wall tool: mark · clear · rectangle</td><td><kbd>T</kbd> · left drag · right drag · <kbd>Shift</kbd>+drag</td></tr>
       <tr><td>Wall ↔ outwall (edges only, see-through)</td><td><kbd>T</kbd> again, or the Outwall button</td></tr>
+      <tr><td>Outwall on one side only (top · left · bottom · right) / whole outline</td><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / <kbd>Space</kbd></td></tr>
       <tr><td>Previous brush</td><td><kbd>Q</kbd></td></tr>
       <tr><td>Move the palette selection</td><td><kbd>Shift</kbd>+<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></td></tr>
       <tr><td>Clear brush</td><td><kbd>Shift</kbd>+<kbd>Space</kbd></td></tr>

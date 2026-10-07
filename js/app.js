@@ -23,6 +23,7 @@
     stamps: [],
     walls: null,
     wallKind: 1,     // what the Wall tool paints: 1 = wall, 2 = outwall (edges only, see-through)
+    outDir: -1,      // outwall side picked with WASD: -1 = whole outline, 0 top, 1 right, 2 bottom, 3 left
     accDir: 0,
     marquee: null,
     tool: 'brush',
@@ -41,7 +42,7 @@
   function isAuto(type) { return !!(AT.TYPES[type] && AT.TYPES[type].auto); }
   function cellsEqual(a, b) {
     if (a === b) return true;
-    if (!a || !b) return false;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
     return a.t === b.t && a.x === b.x && a.y === b.y && a.k === b.k && (a.d || 0) === (b.d || 0);
   }
 
@@ -203,7 +204,8 @@
   }
 
   // Walls are a mask kept beside the layers: a cell is 1 when that tile is marked as wall, 2 for an
-  // outwall (only its outline becomes walls in Foundry: you bump into them but can see through).
+  // outwall (only its outline becomes walls in Foundry: you bump into them but can see through), and
+  // 16 + side mask (1 top, 2 right, 4 bottom, 8 left) for a side outwall: an edge on those sides only.
   // They are only drawn while the wall tool is active and are exported as their own PNG.
   function newWallLayer(cells) {
     return { id: 'walls', name: 'Walls', isWall: true, cells: cells || new Array(S.map.w * S.map.h).fill(null), dirty: new Set() };
@@ -279,11 +281,32 @@
     var c = layer.cells[i];
     if (!c) return;
     if (layer.isWall) {
-      layer.ctx.fillStyle = c === 2 ? '#40c8ff' : '#ff4040';
-      layer.ctx.fillRect(x * ts, y * ts, ts, ts);
+      layer.ctx.fillStyle = c === 1 ? '#ff4040' : '#40c8ff';
+      if (c > 16) sideRects(c & 15, x * ts, y * ts, ts).forEach(function (r) { layer.ctx.fillRect(r[0], r[1], r[2], r[3]); });
+      else layer.ctx.fillRect(x * ts, y * ts, ts, ts);
       return;
     }
     drawCellTo(layer.ctx, c, x * ts, y * ts, 1, function (dx, dy) { return sameAt(layer, x + dx, y + dy, c); });
+  }
+
+  // Strips along the sides in `mask` of a d-sized tile at (x, y), as [x, y, w, h] rectangles.
+  function sideRects(mask, x, y, d) {
+    var t = Math.max(1, Math.round(d / 8)), out = [];
+    if (mask & 1) out.push([x, y, d, t]);
+    if (mask & 2) out.push([x + d - t, y, t, d]);
+    if (mask & 4) out.push([x, y + d - t, d, t]);
+    if (mask & 8) out.push([x, y, t, d]);
+    return out;
+  }
+
+  // What the Wall tool puts on a tile. A side outwall adds its side to the sides the tile already has.
+  function wallValue(x, y, val) {
+    if (val !== 2 || S.outDir < 0) return val;
+    var old = S.walls.cells[y * S.map.w + x];
+    return 16 + ((old > 16 ? old & 15 : 0) | (1 << S.outDir));
+  }
+  function setWall(x, y, val) {
+    if (x >= 0 && y >= 0 && x < S.map.w && y < S.map.h) setCell(S.walls, x, y, wallValue(x, y, val));
   }
 
   function markDirty(layer, x, y) {
@@ -807,6 +830,10 @@
       if (!b.empty && activeLayer() && isAccessoryLayer(activeLayer()) && !b.cells.some(function (c) { return c && c.d !== undefined; })) {
         drawArrow(ox + (tlx + b.w / 2) * d, oy + (tly + b.h / 2) * d, Math.max(6, Math.min(18, d * 0.35)), S.accDir, '#ffd166');
       }
+    } else if (S.tool === 'wall' && S.wallKind === 2 && S.outDir >= 0) {
+      outline(ox + p.x * d, oy + p.y * d, d, d, 'rgba(64,200,255,0.5)');
+      ctx.fillStyle = '#40c8ff';
+      sideRects(1 << S.outDir, ox + p.x * d, oy + p.y * d, d).forEach(function (r) { ctx.fillRect(r[0], r[1], r[2], r[3]); });
     } else {
       outline(ox + p.x * d, oy + p.y * d, d, d, erasing ? '#ff6b6b' : S.tool === 'select' ? '#7fd8ff' : S.tool === 'wall' ? (S.wallKind === 2 ? '#40c8ff' : '#ff4040') : '#ffffff');
     }
@@ -886,7 +913,7 @@
       else {
         drag = { mode: 'wall', val: val, last: p };
         beginStroke();
-        setCell(S.walls, p.x, p.y, val);
+        setWall(p.x, p.y, val);
       }
       requestRender();
       return;
@@ -946,7 +973,7 @@
     } else if (drag.last.x !== p.x || drag.last.y !== p.y) {
       var wd = drag;
       lineCells(drag.last.x, drag.last.y, p.x, p.y, function (x, y) {
-        if (wd.mode === 'wall') setCell(S.walls, x, y, wd.val);
+        if (wd.mode === 'wall') setWall(x, y, wd.val);
         else paintStep({ x: x, y: y });
       });
       drag.last = p;
@@ -965,7 +992,7 @@
       var wr = normRect(d);
       if (wr) {
         beginStroke();
-        for (var y = wr.y; y < wr.y + wr.h; y++) for (var x = wr.x; x < wr.x + wr.w; x++) setCell(S.walls, x, y, d.val);
+        for (var y = wr.y; y < wr.y + wr.h; y++) for (var x = wr.x; x < wr.x + wr.w; x++) setWall(x, y, d.val);
         endStroke();
       }
     }
@@ -2226,7 +2253,8 @@
       }),
       map: {
         w: S.map.w, h: S.map.h, active: S.active,
-        walls: S.walls.cells.map(function (c) { return c ? String(c) : '0'; }).join(''),
+        // One character per tile: 0 none, 1 wall, 2 outwall, A–O side outwall (A + side mask − 1).
+        walls: S.walls.cells.map(function (c) { return !c ? '0' : c > 16 ? String.fromCharCode(64 + (c & 15)) : String(c); }).join(''),
         layers: S.map.layers.map(function (l) {
           // Cells are stored as indexes into a per-layer list of unique tiles to keep files small.
           var uniq = [], keyIdx = {}, data = new Array(l.cells.length);
@@ -2267,7 +2295,10 @@
       S.active = Math.min(p.map.active || 0, S.map.layers.length - 1);
       S.stamps = (p.stamps || []).slice(0, MAX_STAMPS).map(function (st) { return { id: uid('s'), w: st.w, h: st.h, cells: st.cells }; });
       var walls = typeof p.map.walls === 'string' && p.map.walls.length === S.map.w * S.map.h ? p.map.walls : '';
-      S.walls = newWallLayer(Array.prototype.map.call(walls || '0'.repeat(S.map.w * S.map.h), function (ch) { return ch === '1' ? 1 : ch === '2' ? 2 : null; }));
+      S.walls = newWallLayer(Array.prototype.map.call(walls || '0'.repeat(S.map.w * S.map.h), function (ch) {
+        var m = ch.charCodeAt(0) - 64;
+        return ch === '1' ? 1 : ch === '2' ? 2 : m >= 1 && m <= 15 ? 16 + m : null;
+      }));
       resetSelection();
       // Older files only knew a single second palette.
       setExtraPalettes(p.palettes || [{ name: 'Palette 2', ts: p.palette2 }]);
@@ -2590,16 +2621,21 @@
     return new Blob([src.subarray(0, 33), chunk, src.subarray(33)], { type: 'image/png' });
   }
 
-  // Walls PNG, same size as the map PNG so it lines up: red = wall tile (255) or outwall (128), green = decoration pixel,
+  // Walls PNG, same size as the map PNG so it lines up: red = wall tile (255) or outwall (128), a side outwall is
+  // a red (128) strip along those sides of an otherwise empty tile, green = decoration pixel,
   // blue = the decoration's facing (0 ↑, 64 →, 128 ↓, 192 ←). Built at 1× and scaled up without smoothing.
   function drawWallMask(g, w, h) {
-    var px = accessoryPixels(), pw = S.map.w * S.ts, ph = S.map.h * S.ts;
+    var px = accessoryPixels(), pw = S.map.w * S.ts, ph = S.map.h * S.ts, ts = S.ts, t = Math.max(1, Math.round(ts / 8));
     var c = makeCanvas(pw, ph), cg = c.getContext('2d'), img = cg.createImageData(pw, ph), D = img.data;
     for (var i = 0; i < px.length; i++) {
       var x = i % pw, y = (i / pw) | 0;
-      var wall = S.walls.cells[((y / S.ts) | 0) * S.map.w + ((x / S.ts) | 0)];
+      var wall = S.walls.cells[((y / ts) | 0) * S.map.w + ((x / ts) | 0)];
+      if (wall > 16) {
+        var tx = x % ts, ty = y % ts, m = wall & 15;
+        if (!((m & 1 && ty < t) || (m & 4 && ty >= ts - t) || (m & 8 && tx < t) || (m & 2 && tx >= ts - t))) wall = 0;
+      }
       if (!wall && !px[i]) continue;
-      D[i * 4] = wall === 1 ? 255 : wall === 2 ? 128 : 0;
+      D[i * 4] = wall === 1 ? 255 : wall ? 128 : 0;
       D[i * 4 + 1] = px[i] ? 255 : 0;
       D[i * 4 + 2] = px[i] ? (px[i] - 1) * 64 : 0;
       D[i * 4 + 3] = 255;
@@ -2760,7 +2796,16 @@
   // Outwall: tiles whose outline blocks movement but not sight, with no sight-blocking core inside.
   function setWallKind(k) {
     S.wallKind = k;
-    flash(k === 2 ? 'Outwall: only the outline becomes walls — solid to walk into, see-through' : 'Wall: solid edge plus a sight-blocking core');
+    S.outDir = -1;
+    flash(k === 2 ? 'Outwall: only the outline becomes walls — solid to walk into, see-through. WASD = one side only' : 'Wall: solid edge plus a sight-blocking core');
+    syncToolButtons();
+    requestRender();
+  }
+
+  var SIDE_NAMES = ['top', 'right', 'bottom', 'left'];
+  function setOutDir(dir) {
+    S.outDir = dir;
+    flash(dir < 0 ? 'Outwall: whole outline' : 'Outwall: ' + SIDE_NAMES[dir] + ' side only — Space for the whole outline');
     syncToolButtons();
     requestRender();
   }
@@ -2769,6 +2814,7 @@
     document.querySelectorAll('[data-tool]').forEach(function (b) { b.classList.toggle('active', b.dataset.tool === S.tool); });
     $('btnOutwall').hidden = S.tool !== 'wall';
     $('btnOutwall').classList.toggle('active', S.wallKind === 2);
+    $('btnOutwall').textContent = S.wallKind === 2 && S.outDir >= 0 ? '▢ Outwall ' + '↑→↓←'[S.outDir] : '▢ Outwall';
     $('btnGrid').classList.toggle('active', S.grid);
     $('btnDim').classList.toggle('active', S.dim);
     $('btnAxes').classList.toggle('active', S.axes);
@@ -2852,8 +2898,13 @@
       var PAL_DIRS = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] };
       if (PAL_DIRS[k]) { e.preventDefault(); return nudgePaletteSel(PAL_DIRS[k][0], PAL_DIRS[k][1]); }
     }
+    // Outwall mode: WASD puts the outwall on one side of the tile only, Space goes back to the whole outline.
+    var outwalling = S.tool === 'wall' && S.wallKind === 2 && !e.altKey;
+    var OUT_DIRS = { w: 0, d: 1, s: 2, a: 3 };
+    if (outwalling && OUT_DIRS[k] !== undefined) return setOutDir(OUT_DIRS[k]);
     if (e.key === ' ') {
       e.preventDefault();
+      if (outwalling && S.outDir >= 0 && !e.repeat) setOutDir(-1);
       if (!spaceDown) { spaceDown = true; if (!drag) canvas.style.cursor = 'grab'; }
       return;
     }
