@@ -6,6 +6,7 @@
 //    outer rim of a wall stays visible.
 //  - cores: the outline of the wall area shrunk by `inset`. Meant to block sight (and movement),
 //    so nobody can see through a wall or deep into it.
+// Outwall tiles (value 2 in the grid) only get edges: you bump into them but can see straight through.
 // Decorations (WALLACCESSORY pixels) each face a direction. The core is carved away from the side
 // they're seen from, plus `pad` of room, wherever that can be done without opening a hole through the wall.
 (function (root) {
@@ -102,7 +103,7 @@
   /**
    * @param {object} o
    * @param {number} o.cols, o.rows  grid size in tiles
-   * @param {Uint8Array} o.wall      cols×rows, 1 where the tile is a wall
+   * @param {Uint8Array} o.wall      cols×rows, 1 where the tile is a wall, 2 where it is an outwall (edges only)
    * @param {Uint8Array} [o.acc]     (cols·SUB)×(rows·SUB) decoration mask: 0 = none, 1 + direction otherwise
    * @param {number} [o.inset=2]     how far the sight blocker sits inside the wall, in sub-cells (1 … SUB/2-1)
    * @param {number} [o.pad=2]       extra room kept clear around decorations, in sub-cells
@@ -111,10 +112,11 @@
     var cols = o.cols, rows = o.rows, wall = o.wall, acc = o.acc;
     var inset = Math.max(1, Math.min(SUB / 2 - 1, Math.round(o.inset === undefined ? 2 : o.inset)));
     var pad = Math.max(0, Math.round(o.pad === undefined ? 2 : o.pad));
-    var edges = outline(wall, cols, rows, 1);
+    var solid = wall.map(function (v) { return v ? 1 : 0; });
+    var edges = outline(solid, cols, rows, 1);
 
     var W = cols * SUB, H = rows * SUB, fine = new Uint8Array(W * H), x, y, i;
-    for (y = 0; y < H; y++) for (x = 0; x < W; x++) fine[y * W + x] = wall[((y / SUB) | 0) * cols + ((x / SUB) | 0)] ? 1 : 0;
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) fine[y * W + x] = wall[((y / SUB) | 0) * cols + ((x / SUB) | 0)] === 1 ? 1 : 0;
     // Walls carry on past the map edge, so the core reaches the border instead of leaving a gap there.
     var core = erode(fine, W, H, inset, 1);
     var at = function (x, y) { return x < 0 || y < 0 || x >= W || y >= H ? 1 : core[y * W + x]; };

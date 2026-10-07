@@ -15,11 +15,14 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 - **Dice**: paints a random tile from everything you've selected. Ctrl/Shift+drag in either palette adds more tiles to the mix, which is handy for sprinkling grass.
 - **Stamps**: right-drag on the map to copy part of the active layer as a stamp. The last 3 stamps are listed bottom right and saved with the project.
 - **Walls**: the Wall tool (`T`) marks tiles as walls. Walls only show while the tool is active. **Export walls** saves them as a separate PNG for the Foundry VTT module below. While the tool is active you also see a live preview of the walls Foundry will get: blue = see-through edge, black = blocks sight.
+- **Outwalls**: with the Wall tool active, the **Outwall** button (or `T` again) switches to painting outwalls (cyan). Only their outline becomes walls: you bump into them but can see straight through, with no sight-blocking core inside.
 - **Wall decorations**: the **+ Wall deco** button in the Layers panel adds a `WALLACCESSORY` layer (it greys out once that layer exists). Paint posters, banners and so on onto it. Their real pixels are used, so a decoration several tiles long counts as one shape. Each decoration faces a direction, set with the **arrow keys** before you paint: ↑ (default) means it's seen from below, ↓ from above, → from the left, ← from the right. An arrow on the brush shows the current direction. To turn decorations you already placed, select them on that layer and press an arrow key.
 - **Axes**: tile x/y coordinates along the map edges (toggle with `X`).
 - **Map size**: resize any time with an anchor. Tile size can be changed too.
 - **Export PNG** at 1×–8× (or a custom width) with nearest-neighbour scaling, so pixels stay sharp. You can use a transparent or solid background.
 - **Save/Open** projects as `.ponytiler.json` (images are embedded). Your work is also autosaved in the browser.
+- **Maps in the browser**: File → **Save in browser** (`Ctrl+Shift+S`) keeps named maps in this browser; saving again updates the open one. File → **Browser maps…** lists them with thumbnails to open, rename, delete, or download each as its own `.ponytiler.json` (or **Download all** as separate files).
+- The **grid opacity** level is remembered between sessions.
 
 ## Controls
 | Action | Input |
@@ -27,6 +30,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 | Paint | Left drag |
 | Save a stamp | Right drag on the map (copies the active layer) |
 | Mark / clear walls | Wall tool (`T`): left drag / right drag, Shift+drag for a rectangle |
+| Wall ↔ outwall | `T` again while the Wall tool is active, or the Outwall button |
 | Wall decoration facing | Arrow keys (turns the selection too, on the `WALLACCESSORY` layer) |
 | Pan | Space + drag, or middle-mouse drag |
 | Zoom | Mouse wheel, `+` / `-`, `0` = fit, Ctrl+0 = 100% and centre |
@@ -42,6 +46,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 | Set tileset icon | Middle-click a tile in the palette (again to reset) |
 | Undo / redo | Ctrl+Z / Ctrl+Y |
 | Save / open / export | Ctrl+S / Ctrl+O / Ctrl+E |
+| Save in browser | Ctrl+Shift+S |
 
 ## Foundry VTT walls module
 `foundry/ponytiler-walls` is a Foundry VTT module (v12 and v13) that turns the walls PNG into real walls.
@@ -52,10 +57,10 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 4. Click the dungeon button. It's in the Walls tools on the left, and also in the tile's right-click HUD.
 
 This is what you get:
-- **Edge walls** along the outline of every wall area. They block movement but not sight, so players can see the rim of a wall.
-- **Sight-blocking walls** set a bit inside the wall area (25% of a tile by default), so nobody sees through a wall or deep into it.
+- **Edge walls** along the outline of every wall area (walls and outwalls together). They block movement but not sight, so players can see the rim of a wall.
+- **Sight-blocking walls** set a bit inside the wall area (not inside outwalls) (25% of a tile by default), so nobody sees through a wall or deep into it.
 - Around **wall decorations** the sight blocker bulges away from the side the decoration faces, with some extra room (25% by default). A poster facing ↑ can be read from below, but from above you only see wall. Where a wall is too thin for that, the blocker squeezes down to a thin line instead of opening a hole.
 
 Running it again replaces the walls it made from that tile. By default the tile is hidden afterwards.
 
-PNG colours: red = wall tile, green = decoration pixel (yellow where both overlap). The blue channel stores the decoration's facing. The grid size is stored inside the PNG.
+PNG colours: red = wall tile (half-strength red = outwall), green = decoration pixel (yellow where both overlap). The blue channel stores the decoration's facing. The grid size is stored inside the PNG.

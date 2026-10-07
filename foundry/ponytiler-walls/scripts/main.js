@@ -96,8 +96,8 @@ async function run(tile) {
   const opt = await askOptions(guessCols, guessRows, !!img.meta);
   if (!opt || !(opt.cols > 0) || !(opt.rows > 0)) return;
 
-  // Red at the middle of each tile = wall. Every green pixel is part of a decoration, and its blue
-  // value says which way it faces (0 ↑, 64 →, 128 ↓, 192 ←).
+  // Red at the middle of each tile = wall (255) or outwall (128, edges only). Every green pixel is part
+  // of a decoration, and its blue value says which way it faces (0 ↑, 64 →, 128 ↓, 192 ←).
   const { cols, rows } = opt;
   const wall = new Uint8Array(cols * rows);
   for (let y = 0; y < rows; y++) {
@@ -105,7 +105,8 @@ async function run(tile) {
       const px = Math.min(img.w - 1, Math.floor((x + 0.5) * img.w / cols));
       const py = Math.min(img.h - 1, Math.floor((y + 0.5) * img.h / rows));
       const o = (py * img.w + px) * 4;
-      wall[y * cols + x] = img.data[o + 3] >= 128 && img.data[o] >= 128 ? 1 : 0;
+      const r = img.data[o + 3] >= 128 ? img.data[o] : 0;
+      wall[y * cols + x] = r >= 192 ? 1 : r >= 64 ? 2 : 0;
     }
   }
   const W = cols * SUB, H = rows * SUB, acc = new Uint8Array(W * H);
