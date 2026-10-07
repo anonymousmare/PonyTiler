@@ -2609,23 +2609,14 @@
     g.drawImage(c, 0, 0, w, h);
   }
 
-  // "Choose where to save" uses the browser's save dialog (Chrome/Edge). Other browsers always download,
-  // so the option is swapped for a hint about their own "ask where to save" setting.
+  // Exports always ask where to save, using the browser's save dialog (Chrome/Edge). Other browsers download.
   var canPickSave = typeof window.showSaveFilePicker === 'function';
-  $('exPickRow').hidden = !canPickSave;
-  $('exPickNote').hidden = canPickSave;
-  try { $('exPick').checked = localStorage.getItem('ponytiler.exportPick') === '1'; } catch (e) { /* storage blocked */ }
-  function updateExportButton() { $('exGo').textContent = canPickSave && $('exPick').checked ? 'Save PNG…' : 'Download PNG'; }
-  $('exPick').addEventListener('change', function () {
-    try { localStorage.setItem('ponytiler.exportPick', $('exPick').checked ? '1' : '0'); } catch (e) { /* not remembered */ }
-    updateExportButton();
-  });
-  updateExportButton();
+  $('exGo').textContent = canPickSave ? 'Save PNG…' : 'Download PNG';
 
   // Resolves to a file handle, null to fall back to a normal download, or false when the user cancelled.
   // The id makes the browser reopen the folder used last time.
   function pickSaveFile(name) {
-    if (!canPickSave || !$('exPick').checked) return Promise.resolve(null);
+    if (!canPickSave) return Promise.resolve(null);
     return window.showSaveFilePicker({
       id: 'ponytiler-export',
       suggestedName: name,
