@@ -20,7 +20,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 - **Axes**: tile x/y coordinates along the map edges (toggle with `X`).
 - **Map size**: resize any time with an anchor. Tile size can be changed too.
 - **Export PNG** at 1×–8× (or a custom width) with nearest-neighbour scaling, so pixels stay sharp. You can use a transparent or solid background.
-- **Choose where to save**: tick it in the export dialog (for both the map PNG and the walls PNG) to get a save dialog instead of a plain download. The browser reopens the folder you used last, and the setting is remembered. Works in Chrome and Edge. In Firefox, turn on "Always ask where to save files" in its settings instead.
+- **Choose where to save**: exporting the map PNG or the walls PNG always opens a save dialog, reopening the folder you used last. Works in Chrome and Edge; other browsers download the file as usual.
 - **Save/Open** projects as `.ponytiler.json` (images are embedded). Your work is also autosaved in the browser.
 - **Maps in the browser**: File → **Save in browser** (`Ctrl+Shift+S`) keeps named maps in this browser; saving again updates the open one. File → **Browser maps…** lists them with thumbnails to open, rename, delete, or download each as its own `.ponytiler.json` (or **Download all** as separate files).
 - The **grid opacity** level is remembered between sessions.
