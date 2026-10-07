@@ -16,6 +16,8 @@
         <button data-action="new" title="New project">New…</button>
         <button data-action="open" title="Open project (Ctrl+O)">Open… <kbd>Ctrl+O</kbd></button>
         <button data-action="save" title="Save project (Ctrl+S)">Save <kbd>Ctrl+S</kbd></button>
+        <button data-action="saveBrowser" title="Keep a copy of this map in the browser (Ctrl+Shift+S)">Save in browser <kbd>Ctrl+⇧+S</kbd></button>
+        <button data-action="browserMaps" title="Maps kept in this browser: open, download as .json, delete">Browser maps…</button>
       </div>
     </details>
   </div>
@@ -27,6 +29,7 @@
     <button data-tool="picker" title="Eyedropper (F) — or Alt+click">⌖ Pick</button>
     <button data-tool="select" title="Select &amp; move (E) — drag inside the selection to move it, Del to clear, Ctrl+C to make a stamp">⬚ Select</button>
     <button data-tool="wall" title="Walls (T): left-drag marks wall tiles, right-drag clears, Shift+drag for a rectangle. Walls only show while this tool is active.">▦ Wall</button>
+    <button data-action="outwall" id="btnOutwall" hidden title="Outwall (T again): paint tiles whose outline becomes walls you bump into but can see through — no sight-blocking core inside">▢ Outwall</button>
     <button data-action="dice" id="btnDice" title="Dice: paint a random tile from everything selected (Ctrl/Shift+drag in a palette to add more)">⁘ Dice</button>
   </div>
   <div class="group">
@@ -236,6 +239,20 @@
   </form>
 </dialog>
 
+<!-- Maps saved in the browser -->
+<dialog id="dlgMaps">
+  <form method="dialog">
+    <h2>Maps in this browser</h2>
+    <p class="muted">Kept in this browser only. Download them as separate <code>.ponytiler.json</code> files to back them up or move them.</p>
+    <div id="mapsList" class="maps-list"></div>
+    <div class="dlg-btns">
+      <button type="button" id="mapsSaveNew" title="Save the current map as a new entry">+ Save current</button>
+      <button type="button" id="mapsDownloadAll" title="Download every map as its own .json file">Download all</button>
+      <button value="ok" class="accent">Close</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Help -->
 <dialog id="dlgHelp">
   <form method="dialog">
@@ -248,6 +265,7 @@
       <tr><td>Brush · eraser · fill · rect · pick · select</td><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>E</kbd></td></tr>
       <tr><td>Wall decoration facing (↑ = seen from below)</td><td><kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> <kbd>←</kbd></td></tr>
       <tr><td>Wall tool: mark · clear · rectangle</td><td><kbd>T</kbd> · left drag · right drag · <kbd>Shift</kbd>+drag</td></tr>
+      <tr><td>Wall ↔ outwall (edges only, see-through)</td><td><kbd>T</kbd> again, or the Outwall button</td></tr>
       <tr><td>Previous brush</td><td><kbd>Q</kbd></td></tr>
       <tr><td>Move the palette selection</td><td><kbd>Shift</kbd>+<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></td></tr>
       <tr><td>Clear brush</td><td><kbd>Shift</kbd>+<kbd>Space</kbd></td></tr>

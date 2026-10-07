@@ -22,6 +22,7 @@
     prevBrush: null,
     stamps: [],
     walls: null,
+    wallKind: 1,     // what the Wall tool paints: 1 = wall, 2 = outwall (edges only, see-through)
     accDir: 0,
     marquee: null,
     tool: 'brush',
@@ -108,6 +109,11 @@
       return ok && v ? v : null;
     });
   }
+
+  // Enter would otherwise submit with the form's first button, which is Cancel.
+  $('promptInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('dlgPrompt').close('ok'); }
+  });
 
   // ---------------------------------------------------------------------------
   // Tilesets
@@ -196,7 +202,8 @@
     };
   }
 
-  // Walls are a mask kept beside the layers: a cell is 1 when that tile is marked as wall.
+  // Walls are a mask kept beside the layers: a cell is 1 when that tile is marked as wall, 2 for an
+  // outwall (only its outline becomes walls in Foundry: you bump into them but can see through).
   // They are only drawn while the wall tool is active and are exported as their own PNG.
   function newWallLayer(cells) {
     return { id: 'walls', name: 'Walls', isWall: true, cells: cells || new Array(S.map.w * S.map.h).fill(null), dirty: new Set() };
@@ -272,7 +279,7 @@
     var c = layer.cells[i];
     if (!c) return;
     if (layer.isWall) {
-      layer.ctx.fillStyle = '#ff4040';
+      layer.ctx.fillStyle = c === 2 ? '#40c8ff' : '#ff4040';
       layer.ctx.fillRect(x * ts, y * ts, ts, ts);
       return;
     }
@@ -594,7 +601,7 @@
     drawAxes(ox, oy, d);
   }
 
-  // Wall-tool view: red wall tiles, decorations tinted yellow with their facing arrow, and a live preview
+  // Wall-tool view: red wall tiles, cyan outwall tiles, decorations tinted yellow with their facing arrow, and a live preview
   // of what the Foundry module will build (blue = see-through edge, black = blocks sight).
   var wallPreview = null;
   function buildWallPreview() {
@@ -623,7 +630,7 @@
       arrows.push({ x: sx / n + 0.5, y: sy / n + 0.5, d: dirOf[j] });
     }
     var segs = S.walls.cells.some(Boolean) ? PonyWalls.buildWalls({
-      cols: S.map.w, rows: S.map.h, wall: Uint8Array.from(S.walls.cells, function (c) { return c ? 1 : 0; }), acc: accessoryFine(px)
+      cols: S.map.w, rows: S.map.h, wall: Uint8Array.from(S.walls.cells, function (c) { return c || 0; }), acc: accessoryFine(px)
     }) : { edges: [], cores: [] };
     return { tint: tint, arrows: arrows, edges: segs.edges, cores: segs.cores };
   }
@@ -764,8 +771,8 @@
     if (drag && drag.mode === 'wallrect') {
       var wr = normRect(drag);
       if (wr) {
-        if (drag.val) { ctx.fillStyle = 'rgba(255,64,64,0.4)'; ctx.fillRect(ox + wr.x * d, oy + wr.y * d, wr.w * d, wr.h * d); }
-        outline(ox + wr.x * d, oy + wr.y * d, wr.w * d, wr.h * d, drag.val ? '#ff4040' : '#ffffff');
+        if (drag.val) { ctx.fillStyle = drag.val === 2 ? 'rgba(64,200,255,0.4)' : 'rgba(255,64,64,0.4)'; ctx.fillRect(ox + wr.x * d, oy + wr.y * d, wr.w * d, wr.h * d); }
+        outline(ox + wr.x * d, oy + wr.y * d, wr.w * d, wr.h * d, drag.val === 2 ? '#40c8ff' : drag.val ? '#ff4040' : '#ffffff');
       }
       return;
     }
@@ -801,7 +808,7 @@
         drawArrow(ox + (tlx + b.w / 2) * d, oy + (tly + b.h / 2) * d, Math.max(6, Math.min(18, d * 0.35)), S.accDir, '#ffd166');
       }
     } else {
-      outline(ox + p.x * d, oy + p.y * d, d, d, erasing ? '#ff6b6b' : S.tool === 'select' ? '#7fd8ff' : S.tool === 'wall' ? '#ff4040' : '#ffffff');
+      outline(ox + p.x * d, oy + p.y * d, d, d, erasing ? '#ff6b6b' : S.tool === 'select' ? '#7fd8ff' : S.tool === 'wall' ? (S.wallKind === 2 ? '#40c8ff' : '#ff4040') : '#ffffff');
     }
   }
 
@@ -874,7 +881,7 @@
     }
     // Wall tool: left marks walls, right clears them, Shift+drag does a rectangle.
     if (S.tool === 'wall' && (e.button === 0 || e.button === 2)) {
-      var val = e.button === 0 ? 1 : null;
+      var val = e.button === 0 ? S.wallKind : null;
       if (e.shiftKey) drag = { mode: 'wallrect', val: val, x0: p.x, y0: p.y, x1: p.x, y1: p.y };
       else {
         drag = { mode: 'wall', val: val, last: p };
@@ -1653,7 +1660,7 @@
 
   function actBtn(label, title, fn) {
     var b = document.createElement('button');
-    b.textContent = label; b.title = title;
+    b.type = 'button'; b.textContent = label; b.title = title;
     b.addEventListener('click', function (e) { e.stopPropagation(); fn(); });
     return b;
   }
@@ -2219,7 +2226,7 @@
       }),
       map: {
         w: S.map.w, h: S.map.h, active: S.active,
-        walls: S.walls.cells.map(function (c) { return c ? '1' : '0'; }).join(''),
+        walls: S.walls.cells.map(function (c) { return c ? String(c) : '0'; }).join(''),
         layers: S.map.layers.map(function (l) {
           // Cells are stored as indexes into a per-layer list of unique tiles to keep files small.
           var uniq = [], keyIdx = {}, data = new Array(l.cells.length);
@@ -2260,7 +2267,7 @@
       S.active = Math.min(p.map.active || 0, S.map.layers.length - 1);
       S.stamps = (p.stamps || []).slice(0, MAX_STAMPS).map(function (st) { return { id: uid('s'), w: st.w, h: st.h, cells: st.cells }; });
       var walls = typeof p.map.walls === 'string' && p.map.walls.length === S.map.w * S.map.h ? p.map.walls : '';
-      S.walls = newWallLayer(Array.prototype.map.call(walls || '0'.repeat(S.map.w * S.map.h), function (ch) { return ch === '1' ? 1 : null; }));
+      S.walls = newWallLayer(Array.prototype.map.call(walls || '0'.repeat(S.map.w * S.map.h), function (ch) { return ch === '1' ? 1 : ch === '2' ? 2 : null; }));
       resetSelection();
       // Older files only knew a single second palette.
       setExtraPalettes(p.palettes || [{ name: 'Palette 2', ts: p.palette2 }]);
@@ -2285,6 +2292,7 @@
     S.map.layers = [newLayer('Ground'), newLayer('Objects')];
     S.walls = newWallLayer();
     S.active = 0;
+    browserMapId = null;
     if (!old) { S.stamps = []; S.hotkeys = {}; }
     resetSelection();
     clearHistory();
@@ -2313,7 +2321,7 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       saveTimer = null;
-      Store.set('autosave', serialize()).catch(function () { /* autosave is best-effort */ });
+      Store.set('autosave', autosaveData()).catch(function () { /* autosave is best-effort */ });
     }, light ? 2000 : 800);
   }
 
@@ -2321,10 +2329,144 @@
     if (!saveTimer) return;
     clearTimeout(saveTimer);
     saveTimer = null;
-    Store.set('autosave', serialize()).catch(function () {});
+    Store.set('autosave', autosaveData()).catch(function () {});
   }
   document.addEventListener('visibilitychange', function () { if (document.hidden) saveNow(); });
   window.addEventListener('pagehide', saveNow);
+
+  // The autosave also remembers which browser-saved map (if any) is open, so saving again updates it.
+  function autosaveData() { return Object.assign(serialize(), { browserMap: browserMapId, name: $('exName').value }); }
+
+  // ---------------------------------------------------------------------------
+  // Maps saved in the browser (IndexedDB): an index of entries plus one project per entry
+  // ---------------------------------------------------------------------------
+  var browserMapId = null;
+  function mapIndex() { return Store.get('maps').then(function (l) { return Array.isArray(l) ? l : []; }); }
+  function projectName() { return ($('exName').value || 'map').trim() || 'map'; }
+  function fileName(name) { return name.replace(/[^\w\-. ]+/g, '_') + '.ponytiler.json'; }
+
+  function mapThumb() {
+    flushDirty();
+    var pw = S.map.w * S.ts, ph = S.map.h * S.ts, k = Math.min(1, 128 / pw, 96 / ph);
+    var c = makeCanvas(Math.max(1, Math.round(pw * k)), Math.max(1, Math.round(ph * k))), g = c.getContext('2d');
+    g.imageSmoothingEnabled = k < 1;
+    S.map.layers.forEach(function (l) {
+      if (!l.visible) return;
+      g.globalAlpha = l.opacity;
+      g.drawImage(l.canvas, 0, 0, c.width, c.height);
+    });
+    return c.toDataURL('image/png');
+  }
+
+  // Saves over the open browser map, or as a new entry when there is none (or asNew is set).
+  function saveToBrowser(asNew) {
+    var id = asNew === true ? null : browserMapId;
+    return mapIndex().then(function (list) {
+      var entry = id && list.find(function (m) { return m.id === id; });
+      var named = entry ? Promise.resolve(entry.name) : promptText('Save map in browser as', projectName());
+      return named.then(function (name) {
+        if (!name) return null;
+        if (!entry) { entry = { id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }; list.unshift(entry); }
+        Object.assign(entry, { name: name, savedAt: Date.now(), w: S.map.w, h: S.map.h, thumb: mapThumb() });
+        return Store.set('map:' + entry.id, serialize()).then(function () { return Store.set('maps', list); }).then(function () {
+          browserMapId = entry.id;
+          $('exName').value = name;
+          changed(true);
+          flash('Saved "' + name + '" in the browser');
+          return entry;
+        });
+      });
+    }).catch(function (e) { alert('Could not save in the browser: ' + e.message); });
+  }
+
+  function openBrowserMap(entry) {
+    return Store.get('map:' + entry.id).then(function (p) {
+      if (!p) throw new Error('That map is missing from browser storage');
+      return loadProject(p);
+    }).then(function () {
+      browserMapId = entry.id;
+      $('exName').value = entry.name;
+      flash('Opened "' + entry.name + '"');
+      changed();
+    });
+  }
+
+  function downloadBrowserMap(entry) {
+    return Store.get('map:' + entry.id).then(function (p) {
+      if (!p) throw new Error('That map is missing from browser storage');
+      download(new Blob([JSON.stringify(p)], { type: 'application/json' }), fileName(entry.name));
+    });
+  }
+
+  function renderMapsList() {
+    return mapIndex().then(function (list) {
+      var box = $('mapsList');
+      box.innerHTML = '';
+      $('mapsDownloadAll').disabled = !list.length;
+      if (!list.length) { box.innerHTML = '<div class="empty">No maps saved in this browser yet.</div>'; return; }
+      list.forEach(function (m) {
+        var row = document.createElement('div');
+        row.className = 'map-row' + (m.id === browserMapId ? ' current' : '');
+        var img = document.createElement('img');
+        if (m.thumb) img.src = m.thumb;
+        var meta = document.createElement('div');
+        meta.className = 'meta';
+        var b = document.createElement('b'), info = document.createElement('span');
+        b.textContent = m.name + (m.id === browserMapId ? '  (open)' : '');
+        info.textContent = m.w + '×' + m.h + ' tiles · ' + new Date(m.savedAt).toLocaleString();
+        meta.append(b, info);
+        var acts = document.createElement('div');
+        acts.className = 'acts';
+        var fail = function (e) { alert(e.message); };
+        acts.append(
+          actBtn('Open', 'Open this map (the current one stays in its own entry / file)', function () {
+            openBrowserMap(m).then(function () { $('dlgMaps').close(); }).catch(fail);
+          }),
+          actBtn('.json', 'Download as ' + fileName(m.name), function () { downloadBrowserMap(m).catch(fail); }),
+          actBtn('✎', 'Rename', function () {
+            promptText('Rename map', m.name).then(function (n) {
+              if (!n) return;
+              return mapIndex().then(function (l) {
+                var e = l.find(function (x) { return x.id === m.id; });
+                if (e) e.name = n;
+                if (m.id === browserMapId) $('exName').value = n;
+                return Store.set('maps', l);
+              }).then(renderMapsList);
+            });
+          }),
+          actBtn('×', 'Delete from the browser', function () {
+            if (!confirm('Delete "' + m.name + '" from this browser? Download it first if you want to keep it.')) return;
+            mapIndex().then(function (l) {
+              return Store.set('maps', l.filter(function (x) { return x.id !== m.id; }));
+            }).then(function () { return Store.del('map:' + m.id); }).then(function () {
+              if (m.id === browserMapId) browserMapId = null;
+              renderMapsList();
+            });
+          })
+        );
+        row.append(img, meta, acts);
+        box.appendChild(row);
+      });
+    });
+  }
+
+  function browserMapsDialog() {
+    renderMapsList();
+    showDialog($('dlgMaps'));
+  }
+  $('mapsSaveNew').addEventListener('click', function () {
+    saveToBrowser(true).then(function (e) { if (e) renderMapsList(); });
+  });
+  // Each map becomes its own .json file; spaced out so the browser doesn't drop any of the downloads.
+  $('mapsDownloadAll').addEventListener('click', function () {
+    mapIndex().then(function (list) {
+      list.reduce(function (p, m) {
+        return p.then(function () { return downloadBrowserMap(m); }).then(function () {
+          return new Promise(function (r) { setTimeout(r, 350); });
+        }).catch(function () {});
+      }, Promise.resolve()).then(function () { flash('Downloaded ' + list.length + ' map' + (list.length > 1 ? 's' : '')); });
+    });
+  });
 
   function saveProject() {
     var name = ($('exName').value || 'map').replace(/[^\w\-. ]+/g, '_');
@@ -2339,6 +2481,7 @@
       var p;
       try { p = JSON.parse(r.result); } catch (e) { return alert('That file is not valid JSON.'); }
       loadProject(p).then(function () {
+        browserMapId = null;
         $('exName').value = file.name.replace(/(\.ponytiler)?\.json$/i, '');
         flash('Opened ' + file.name);
         changed();
@@ -2447,16 +2590,16 @@
     return new Blob([src.subarray(0, 33), chunk, src.subarray(33)], { type: 'image/png' });
   }
 
-  // Walls PNG, same size as the map PNG so it lines up: red = wall tile, green = decoration pixel,
+  // Walls PNG, same size as the map PNG so it lines up: red = wall tile (255) or outwall (128), green = decoration pixel,
   // blue = the decoration's facing (0 ↑, 64 →, 128 ↓, 192 ←). Built at 1× and scaled up without smoothing.
   function drawWallMask(g, w, h) {
     var px = accessoryPixels(), pw = S.map.w * S.ts, ph = S.map.h * S.ts;
     var c = makeCanvas(pw, ph), cg = c.getContext('2d'), img = cg.createImageData(pw, ph), D = img.data;
     for (var i = 0; i < px.length; i++) {
       var x = i % pw, y = (i / pw) | 0;
-      var wall = !!S.walls.cells[((y / S.ts) | 0) * S.map.w + ((x / S.ts) | 0)];
+      var wall = S.walls.cells[((y / S.ts) | 0) * S.map.w + ((x / S.ts) | 0)];
       if (!wall && !px[i]) continue;
-      D[i * 4] = wall ? 255 : 0;
+      D[i * 4] = wall === 1 ? 255 : wall === 2 ? 128 : 0;
       D[i * 4 + 1] = px[i] ? 255 : 0;
       D[i * 4 + 2] = px[i] ? (px[i] - 1) * 64 : 0;
       D[i * 4 + 3] = 255;
@@ -2531,7 +2674,7 @@
   // Toolbar & keyboard
   // ---------------------------------------------------------------------------
   function setTool(t) {
-    if (t === 'wall' && S.tool !== 'wall') flash('Walls: left-drag marks, right-drag clears, Shift+drag for a rectangle');
+    if (t === 'wall' && S.tool !== 'wall') flash((S.wallKind === 2 ? 'Outwalls' : 'Walls') + ': left-drag marks, right-drag clears, Shift+drag for a rectangle');
     S.tool = t;
     syncToolButtons();
     requestRender();
@@ -2547,6 +2690,7 @@
     Array.prototype.forEach.call(bar.children, function (seg, i) { seg.classList.toggle('on', i < S.gridLevel); });
     bar.setAttribute('aria-valuenow', Math.round(gridAlpha() * 100));
     bar.title = 'Grid opacity ' + Math.round(gridAlpha() * 100) + '% — click or drag, scroll to step';
+    try { localStorage.setItem('ponytiler.gridLevel', String(S.gridLevel)); } catch (e) { /* not remembered */ }
     requestRender();
   }
   (function () {
@@ -2565,11 +2709,24 @@
       else return;
       e.preventDefault(); e.stopPropagation();
     });
-    setGridLevel(S.gridLevel);
+    // The level is a per-browser preference, not part of the project.
+    var saved = null;
+    try { saved = localStorage.getItem('ponytiler.gridLevel'); } catch (e) { /* storage blocked */ }
+    setGridLevel(saved !== null && !isNaN(parseInt(saved, 10)) ? parseInt(saved, 10) : S.gridLevel);
   })();
+
+  // Outwall: tiles whose outline blocks movement but not sight, with no sight-blocking core inside.
+  function setWallKind(k) {
+    S.wallKind = k;
+    flash(k === 2 ? 'Outwall: only the outline becomes walls — solid to walk into, see-through' : 'Wall: solid edge plus a sight-blocking core');
+    syncToolButtons();
+    requestRender();
+  }
 
   function syncToolButtons() {
     document.querySelectorAll('[data-tool]').forEach(function (b) { b.classList.toggle('active', b.dataset.tool === S.tool); });
+    $('btnOutwall').hidden = S.tool !== 'wall';
+    $('btnOutwall').classList.toggle('active', S.wallKind === 2);
     $('btnGrid').classList.toggle('active', S.grid);
     $('btnDim').classList.toggle('active', S.dim);
     $('btnAxes').classList.toggle('active', S.axes);
@@ -2604,6 +2761,9 @@
     resize: resizeDialog,
     export: function () { exportDialog('map'); },
     exportWalls: function () { exportDialog('walls'); },
+    outwall: function () { setWallKind(S.wallKind === 2 ? 1 : 2); },
+    saveBrowser: saveToBrowser,
+    browserMaps: browserMapsDialog,
     newFolder: function () { createFolder(); },
     addPalette: function () { addPalette(); changed(true); },
     clearKeys: clearHotkeys,
@@ -2638,6 +2798,7 @@
     }
     if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
     if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
+    if (mod && k === 's' && e.shiftKey) { e.preventDefault(); saveToBrowser(); return; }
     if (mod && k === 's') { e.preventDefault(); saveProject(); return; }
     if (mod && k === 'o') { e.preventDefault(); actions.open(); return; }
     if (mod && k === 'e') { e.preventDefault(); exportDialog('map'); return; }
@@ -2655,6 +2816,7 @@
       return;
     }
     var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', t: 'wall', b: 'brush', i: 'picker' };
+    if (k === 't' && S.tool === 'wall') return actions.outwall();
     if (map[k]) return setTool(map[k]);
     if (k === 'q') return swapBrush();
     if (k === 'g') return actions.grid();
@@ -2705,7 +2867,11 @@
   resizeCanvas();
   addPalette({ name: 'Palette 2' });
   Store.get('autosave').then(function (p) {
-    if (p) return loadProject(p).then(function () { flash('Restored your last session'); });
+    if (p) return loadProject(p).then(function () {
+      browserMapId = p.browserMap || null;
+      if (p.name) $('exName').value = p.name;
+      flash('Restored your last session');
+    });
     newProject(40, 30, 32, false);
   }).catch(function () {
     newProject(40, 30, 32, false);
