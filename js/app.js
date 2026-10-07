@@ -1409,14 +1409,6 @@
       palCtx.strokeStyle = '#f2ee4a';
       palCtx.strokeRect(x0 * d + 1, y0 * d + 1, w * d - 2, h * d - 2);
     });
-    if (t.icon && paletteCell(t, t.icon.x, t.icon.y)) {
-      // Corner triangle marks the tile used as the list icon.
-      var ix = t.icon.x * d, iy = t.icon.y * d, m = Math.max(5, Math.round(d * 0.3));
-      palCtx.fillStyle = '#ff4fd8';
-      palCtx.beginPath();
-      palCtx.moveTo(ix + d - m, iy); palCtx.lineTo(ix + d, iy); palCtx.lineTo(ix + d, iy + m);
-      palCtx.fill();
-    }
     drawHotkeyLabels(P, palCtx, d);
   }
 
