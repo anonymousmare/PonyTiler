@@ -15,7 +15,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 - **Dice**: paints a random tile from everything you've selected. Ctrl/Shift+drag in either palette adds more tiles to the mix, which is handy for sprinkling grass.
 - **Stamps**: right-drag on the map to copy part of the active layer as a stamp. The last 3 stamps are listed bottom right and saved with the project.
 - **Walls**: the Wall tool (`T`) marks tiles as walls. Walls only show while the tool is active. **Export walls** saves them as a separate PNG for the Foundry VTT module below. While the tool is active you also see a live preview of the walls Foundry will get: blue = see-through edge, black = blocks sight.
-- **Outwalls**: with the Wall tool active, the **Outwall** button (or `T` again) switches to painting outwalls (cyan). Only their outline becomes walls: you bump into them but can see straight through, with no sight-blocking core inside.
+- **Outwalls**: with the Wall tool active, the **Outwall** button (or `T` again) switches to painting outwalls (cyan). Only their outline becomes walls: you bump into them but can see straight through, with no sight-blocking core inside. While outwall is on, `W` `A` `S` `D` pick one side (top, left, bottom, right): painting then only puts a wall along that side of each tile, and painting another side on the same tile adds to it. `Space` goes back to the whole outline. Right-drag clears the tile.
 - **Wall decorations**: the **+ Wall deco** button in the Layers panel adds a `WALLACCESSORY` layer (it greys out once that layer exists). Paint posters, banners and so on onto it. Their real pixels are used, so a decoration several tiles long counts as one shape. Each decoration faces a direction, set with the **arrow keys** before you paint: ↑ (default) means it's seen from below, ↓ from above, → from the left, ← from the right. An arrow on the brush shows the current direction. To turn decorations you already placed, select them on that layer and press an arrow key.
 - **Axes**: tile x/y coordinates along the map edges (toggle with `X`).
 - **Map size**: resize any time with an anchor. Tile size can be changed too.
@@ -32,6 +32,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 | Save a stamp | Right drag on the map (copies the active layer) |
 | Mark / clear walls | Wall tool (`T`): left drag / right drag, Shift+drag for a rectangle |
 | Wall ↔ outwall | `T` again while the Wall tool is active, or the Outwall button |
+| Outwall on one side | `W` `A` `S` `D` while painting outwalls; `Space` for the whole outline |
 | Wall decoration facing | Arrow keys (turns the selection too, on the `WALLACCESSORY` layer) |
 | Pan | Space + drag, or middle-mouse drag |
 | Zoom | Mouse wheel, `+` / `-`, `0` = fit, Ctrl+0 = 100% and centre |
@@ -58,10 +59,10 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 4. Click the dungeon button. It's in the Walls tools on the left, and also in the tile's right-click HUD.
 
 This is what you get:
-- **Edge walls** along the outline of every wall area (walls and outwalls together). They block movement but not sight, so players can see the rim of a wall.
+- **Edge walls** along the outline of every wall area (walls and outwalls together), plus a single edge for every side outwall. They block movement but not sight, so players can see the rim of a wall.
 - **Sight-blocking walls** set a bit inside the wall area (not inside outwalls) (25% of a tile by default), so nobody sees through a wall or deep into it.
 - Around **wall decorations** the sight blocker bulges away from the side the decoration faces, with some extra room (25% by default). A poster facing ↑ can be read from below, but from above you only see wall. Where a wall is too thin for that, the blocker squeezes down to a thin line instead of opening a hole.
 
 Running it again replaces the walls it made from that tile. By default the tile is hidden afterwards.
 
-PNG colours: red = wall tile (half-strength red = outwall), green = decoration pixel (yellow where both overlap). The blue channel stores the decoration's facing. The grid size is stored inside the PNG.
+PNG colours: red = wall tile (half-strength red = outwall; a half-strength strip along a tile side = side outwall), green = decoration pixel (yellow where both overlap). The blue channel stores the decoration's facing. The grid size is stored inside the PNG.

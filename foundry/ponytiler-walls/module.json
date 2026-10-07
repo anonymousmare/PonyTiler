@@ -2,7 +2,7 @@
   "id": "ponytiler-walls",
   "title": "PonyTiler Walls",
   "description": "Builds walls from a PonyTiler walls PNG: see-through colliding walls on the edges, sight-blocking walls inside, and room left around WALLACCESSORY decorations.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "authors": [{ "name": "anonymousmare" }],
   "compatibility": { "minimum": "12", "verified": "13" },
   "esmodules": ["scripts/main.js"],

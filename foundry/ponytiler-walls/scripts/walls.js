@@ -7,6 +7,8 @@
 //  - cores: the outline of the wall area shrunk by `inset`. Meant to block sight (and movement),
 //    so nobody can see through a wall or deep into it.
 // Outwall tiles (value 2 in the grid) only get edges: you bump into them but can see straight through.
+// Side outwalls (value 16 + side mask: 1 top, 2 right, 4 bottom, 8 left) are just an edge wall along
+// those sides of the tile; the tile itself stays open.
 // Decorations (WALLACCESSORY pixels) each face a direction. The core is carved away from the side
 // they're seen from, plus `pad` of room, wherever that can be done without opening a hole through the wall.
 (function (root) {
@@ -79,20 +81,35 @@
   })();
 
   // Boundary segments of a binary grid, merged into long runs. Edges on the grid border are skipped.
-  function outline(g, w, h, scale) {
-    var segs = [], x, y, start, on;
-    for (y = 1; y < h; y++) {
+  // `extra` (optional, cols×rows side masks as in the wall grid) adds single tile sides on top.
+  function outline(g, w, h, scale, extra) {
+    var hz = new Uint8Array(w * (h + 1)), vt = new Uint8Array((w + 1) * h), x, y, m;
+    for (y = 1; y < h; y++) for (x = 0; x < w; x++) hz[y * w + x] = g[(y - 1) * w + x] !== g[y * w + x] ? 1 : 0;
+    for (y = 0; y < h; y++) for (x = 1; x < w; x++) vt[y * (w + 1) + x] = g[y * w + x - 1] !== g[y * w + x] ? 1 : 0;
+    if (extra) {
+      for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+          if (!(m = extra[y * w + x])) continue;
+          if (m & 1) hz[y * w + x] = 1;
+          if (m & 4) hz[(y + 1) * w + x] = 1;
+          if (m & 8) vt[y * (w + 1) + x] = 1;
+          if (m & 2) vt[y * (w + 1) + x + 1] = 1;
+        }
+      }
+    }
+    var segs = [], start, on;
+    for (y = 0; y <= h; y++) {
       start = -1;
       for (x = 0; x <= w; x++) {
-        on = x < w && g[(y - 1) * w + x] !== g[y * w + x];
+        on = x < w && hz[y * w + x] === 1;
         if (on && start < 0) start = x;
         if (!on && start >= 0) { segs.push([start / scale, y / scale, x / scale, y / scale]); start = -1; }
       }
     }
-    for (x = 1; x < w; x++) {
+    for (x = 0; x <= w; x++) {
       start = -1;
       for (y = 0; y <= h; y++) {
-        on = y < h && g[y * w + x - 1] !== g[y * w + x];
+        on = y < h && vt[y * (w + 1) + x] === 1;
         if (on && start < 0) start = y;
         if (!on && start >= 0) { segs.push([x / scale, start / scale, x / scale, y / scale]); start = -1; }
       }
@@ -103,7 +120,8 @@
   /**
    * @param {object} o
    * @param {number} o.cols, o.rows  grid size in tiles
-   * @param {Uint8Array} o.wall      cols×rows, 1 where the tile is a wall, 2 where it is an outwall (edges only)
+   * @param {Uint8Array} o.wall      cols×rows, 1 where the tile is a wall, 2 where it is an outwall (edges only),
+   *                                 16 + side mask for a side outwall (an edge along those sides only)
    * @param {Uint8Array} [o.acc]     (cols·SUB)×(rows·SUB) decoration mask: 0 = none, 1 + direction otherwise
    * @param {number} [o.inset=2]     how far the sight blocker sits inside the wall, in sub-cells (1 … SUB/2-1)
    * @param {number} [o.pad=2]       extra room kept clear around decorations, in sub-cells
@@ -112,8 +130,9 @@
     var cols = o.cols, rows = o.rows, wall = o.wall, acc = o.acc;
     var inset = Math.max(1, Math.min(SUB / 2 - 1, Math.round(o.inset === undefined ? 2 : o.inset)));
     var pad = Math.max(0, Math.round(o.pad === undefined ? 2 : o.pad));
-    var solid = wall.map(function (v) { return v ? 1 : 0; });
-    var edges = outline(solid, cols, rows, 1);
+    var solid = wall.map(function (v) { return v === 1 || v === 2 ? 1 : 0; });
+    var sides = wall.map(function (v) { return v > 16 ? v & 15 : 0; });
+    var edges = outline(solid, cols, rows, 1, sides);
 
     var W = cols * SUB, H = rows * SUB, fine = new Uint8Array(W * H), x, y, i;
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) fine[y * W + x] = wall[((y / SUB) | 0) * cols + ((x / SUB) | 0)] === 1 ? 1 : 0;
