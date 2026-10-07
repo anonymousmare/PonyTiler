@@ -577,12 +577,12 @@
     ctx.globalAlpha = 1;
     if (S.tool === 'wall') drawWalls(ox, oy, d);
 
-    if (S.grid && S.gridLevel && d >= 6) {
+    if (S.grid && d >= 6) {
       ctx.beginPath();
       var px = 1 / dpr;
       for (var x = 0; x <= S.map.w; x++) { var gx = ox + x * d; ctx.rect(gx, oy, px, mh); }
       for (var y = 0; y <= S.map.h; y++) { var gy = oy + y * d; ctx.rect(ox, gy, mw, px); }
-      ctx.fillStyle = 'rgba(98,214,255,' + S.gridLevel / GRID_SEGS + ')';
+      ctx.fillStyle = 'rgba(98,214,255,' + gridAlpha() + ')';
       ctx.fill();
     }
     ctx.strokeStyle = '#f2ee4a';
@@ -2434,14 +2434,16 @@
     requestRender();
   }
 
-  // Grid opacity bar: N segments, all lit = 100%, none = 0%.
+  // Grid opacity bar: N segments, all lit = 100%. None lit is the faintest step,
+  // not invisible — turning the grid off is the Grid button's job.
   var GRID_SEGS = 8;
+  function gridAlpha() { return Math.max(S.gridLevel, 0.5) / GRID_SEGS; }
   function setGridLevel(n) {
     S.gridLevel = Math.max(0, Math.min(GRID_SEGS, n));
     var bar = $('gridOpacity');
     Array.prototype.forEach.call(bar.children, function (seg, i) { seg.classList.toggle('on', i < S.gridLevel); });
-    bar.setAttribute('aria-valuenow', Math.round(S.gridLevel / GRID_SEGS * 100));
-    bar.title = 'Grid opacity ' + Math.round(S.gridLevel / GRID_SEGS * 100) + '% — click or drag, scroll to step';
+    bar.setAttribute('aria-valuenow', Math.round(gridAlpha() * 100));
+    bar.title = 'Grid opacity ' + Math.round(gridAlpha() * 100) + '% — click or drag, scroll to step';
     requestRender();
   }
   (function () {
@@ -2544,10 +2546,10 @@
       if (!spaceDown) { spaceDown = true; if (!drag) canvas.style.cursor = 'grab'; }
       return;
     }
-    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', v: 'wall', b: 'brush', g: 'fill', r: 'rect', i: 'picker' };
+    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', v: 'wall', b: 'brush', r: 'rect', i: 'picker' };
     if (map[k]) return setTool(map[k]);
     if (k === 'q') return swapBrush();
-    if (k === 'h') return actions.grid();
+    if (k === 'g') return actions.grid();
     if (k === 'x') return actions.axes();
     if (k === 'l') return actions.dim();
     if (drag && (e.key === 'Escape' || e.key === 'Delete' || e.key === 'Backspace')) return;

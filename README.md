@@ -34,7 +34,7 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 | Previous brush | `Q` |
 | Unselect brush / selection | `Esc`, or ✕ next to the palette zoom |
 | Selection | Drag inside to move, `Del` to clear, Ctrl+C to make a stamp |
-| Grid / axes / focus layer | `H` / `X` / `L` |
+| Grid / axes / focus layer | `G` / `X` / `L` |
 | Switch layer | `[` / `]` |
 | Rename tileset or folder | Double-click it |
 | Set tileset icon | Middle-click a tile in the palette (again to reset) |
