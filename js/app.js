@@ -27,7 +27,7 @@
     tool: 'brush',
     dice: false,
     zoom: 1, ox: 0, oy: 0,
-    grid: true, gridLevel: 1, dim: false, axes: true,  // gridLevel: lit segments of the grid opacity bar
+    grid: true, gridLevel: 2, dim: false, axes: true,  // gridLevel: lit segments of the grid opacity bar
     hover: null,
     hotkeys: {},     // letter -> { t: tileset id, x0, y0, x1, y1 } in palette grid cells
     palHover: null,  // { P, x, y } while the pointer is over a palette
@@ -2443,7 +2443,7 @@
   }
 
   // Grid opacity bar: N segments, all lit = 100%, none = 0%.
-  var GRID_SEGS = 5;
+  var GRID_SEGS = 8;
   function setGridLevel(n) {
     S.gridLevel = Math.max(0, Math.min(GRID_SEGS, n));
     var bar = $('gridOpacity');
@@ -2454,6 +2454,7 @@
   }
   (function () {
     var bar = $('gridOpacity');
+    for (var i = 0; i < GRID_SEGS; i++) bar.appendChild(document.createElement('i'));
     function fromY(e) {
       var r = bar.getBoundingClientRect();
       setGridLevel(Math.round((r.bottom - e.clientY) / r.height * GRID_SEGS));
