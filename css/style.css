@@ -1,12 +1,14 @@
 /* Vector-terminal look: black field, phosphor text, no curves anywhere. */
 :root {
   --bg: #000;
-  --panel: #030504;
-  --panel-2: #0a110d;
-  --line: #1f3a2a;
-  --line-hi: #2f6a46;
-  --text: #7dff8f;
-  --muted: #3f9a55;
+  /* The phosphor colours follow the active layer's hue; 128 is the original green. */
+  --hue: 128;
+  --panel: hsl(calc(var(--hue) + 22), 25%, 1.6%);
+  --panel-2: hsl(calc(var(--hue) + 18), 25.9%, 5.3%);
+  --line: hsl(calc(var(--hue) + 16), 30.3%, 17.5%);
+  --line-hi: hsl(calc(var(--hue) + 15), 38.6%, 30%);
+  --text: hsl(var(--hue), 100%, 74.5%);
+  --muted: hsl(calc(var(--hue) + 6), 41.9%, 42.5%);
   --accent: #f2ee4a;
   --accent-2: #8a8620;
   --cyan: #62d6ff;
@@ -194,6 +196,7 @@ aside { width: 340px; display: flex; flex-direction: column; background: var(--p
 .layer .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layer .tog { border: 1px solid var(--line-hi); padding: 0; width: 13px; height: 13px; font-size: 9px; color: var(--cyan); }
 .layer .tog.off { opacity: .3; color: var(--muted); }
+.bg-pop canvas.hue-strip { height: 16px; cursor: ew-resize; }
 .layer.dragover { outline: 1px dashed var(--cyan); }
 
 .row { display: flex; align-items: center; gap: 6px; padding: 2px 6px; }

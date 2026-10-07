@@ -188,9 +188,10 @@
   // ---------------------------------------------------------------------------
   // Layers & cells
   // ---------------------------------------------------------------------------
+  var DEFAULT_HUE = 128;
   function newLayer(name) {
     return {
-      id: uid('l'), name: name, visible: true, locked: false, opacity: 1,
+      id: uid('l'), name: name, visible: true, locked: false, opacity: 1, hue: DEFAULT_HUE,
       cells: new Array(S.map.w * S.map.h).fill(null), canvas: null, dirty: new Set()
     };
   }
@@ -338,7 +339,7 @@
     return {
       w: S.map.w, h: S.map.h, active: S.active, walls: S.walls.cells.slice(),
       layers: S.map.layers.map(function (l) {
-        return { id: l.id, name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity, cells: l.cells.slice() };
+        return { id: l.id, name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity, hue: l.hue, cells: l.cells.slice() };
       })
     };
   }
@@ -350,7 +351,7 @@
     S.map.layers.forEach(function (l) { byId[l.id] = l; });
     S.map.layers = snap.layers.map(function (s) {
       var l = byId[s.id] || { id: s.id, dirty: new Set() };
-      l.name = s.name; l.visible = s.visible; l.locked = s.locked; l.opacity = s.opacity;
+      l.name = s.name; l.visible = s.visible; l.locked = s.locked; l.opacity = s.opacity; l.hue = s.hue;
       l.cells = s.cells.slice();
       return l;
     });
@@ -582,7 +583,7 @@
       var px = 1 / dpr;
       for (var x = 0; x <= S.map.w; x++) { var gx = ox + x * d; ctx.rect(gx, oy, px, mh); }
       for (var y = 0; y <= S.map.h; y++) { var gy = oy + y * d; ctx.rect(ox, gy, mw, px); }
-      ctx.fillStyle = 'rgba(98,214,255,' + gridAlpha() + ')';
+      ctx.fillStyle = uiGrid + gridAlpha() + ')';
       ctx.fill();
     }
     ctx.strokeStyle = '#f2ee4a';
@@ -691,7 +692,7 @@
         if (x % sx && x !== hx) continue;
         var cx = ox + (x + 0.5) * d;
         if (cx < x0 || cx > x1) continue;
-        ctx.fillStyle = x === hx ? '#ff3bf0' : '#3f9a55';
+        ctx.fillStyle = x === hx ? '#ff3bf0' : uiMuted;
         ctx.fillText(String(x), cx, ty + th / 2);
       }
     }
@@ -705,7 +706,7 @@
         if (y % sy && y !== hy) continue;
         var cy = oy + (y + 0.5) * d;
         if (cy < y0 || cy > y1) continue;
-        ctx.fillStyle = y === hy ? '#ff3bf0' : '#3f9a55';
+        ctx.fillStyle = y === hy ? '#ff3bf0' : uiMuted;
         ctx.fillText(String(y), lx + lw / 2, cy);
       }
     }
@@ -713,12 +714,13 @@
     ctx.fillRect(lx, ty, lw, th);
   }
 
+  // Tinted with the active layer's hue; applyUiHue drops it so it's rebuilt.
   var checker = null;
   function checkerPattern() {
     if (!checker) {
-      var c = makeCanvas(16, 16), g = c.getContext('2d');
-      g.fillStyle = '#0b100d'; g.fillRect(0, 0, 16, 16);
-      g.fillStyle = '#060906'; g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8);
+      var c = makeCanvas(16, 16), g = c.getContext('2d'), l = activeLayer(), hue = l ? l.hue : DEFAULT_HUE;
+      g.fillStyle = 'hsl(' + (hue + 16) + ',18.5%,5.3%)'; g.fillRect(0, 0, 16, 16);
+      g.fillStyle = 'hsl(' + (hue - 8) + ',20%,2.9%)'; g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8);
       checker = ctx.createPattern(c, 'repeat');
     }
     return checker;
@@ -1397,7 +1399,7 @@
     } else {
       palCtx.drawImage(t.img, 0, 0, t.cols * ts, t.rows * ts, 0, 0, t.cols * d, t.rows * d);
     }
-    palCtx.fillStyle = 'rgba(98,214,255,0.14)';
+    palCtx.fillStyle = uiGrid + '0.14)';
     for (var x = 1; x < t.palCols; x++) palCtx.fillRect(Math.round(x * d), 0, 1, pal.height);
     for (var y = 1; y < t.palRows; y++) palCtx.fillRect(0, Math.round(y * d), pal.width, 1);
     P.sels.forEach(function (s) {
@@ -1986,7 +1988,64 @@
     var l = activeLayer();
     $('layerOpacity').value = l ? Math.round(l.opacity * 100) : 100;
     $('layerOpacityVal').textContent = $('layerOpacity').value + '%';
+    applyUiHue();
   }
+
+  // The UI's phosphor colours (see --hue in style.css) follow the active layer's colour.
+  var uiMuted = 'hsl(134,41.9%,42.5%)', uiGrid = 'hsla(128,100%,69%,';
+  function applyUiHue() {
+    var l = activeLayer(), hue = l ? l.hue : DEFAULT_HUE;
+    document.documentElement.style.setProperty('--hue', hue);
+    uiMuted = 'hsl(' + (hue + 6) + ',41.9%,42.5%)';
+    uiGrid = 'hsla(' + hue + ',100%,69%,';
+    checker = null;
+    requestRender();
+    palettes.forEach(renderPalette);
+  }
+  function layerColour(hue) { return 'hsl(' + hue + ',100%,74.5%)'; }
+
+  // Hue strip under a layer's colour button; saturation and brightness stay fixed.
+  var huePick = null;
+  function openHuePicker(l, btn) {
+    closeHuePicker();
+    var W = 180, H = 16;
+    var pop = document.createElement('div');
+    pop.className = 'bg-pop';
+    pop.innerHTML = '<canvas class="hue-strip" width="' + W + '" height="' + H + '"></canvas>' +
+      '<div class="bg-pop-row"><span class="bg-hex"></span><button type="button" class="hue-reset">Reset</button></div>';
+    var pad = pop.querySelector('canvas'), g = pad.getContext('2d'), valEl = pop.querySelector('.bg-hex');
+    function draw() {
+      for (var x = 0; x < W; x++) { g.fillStyle = layerColour(x / W * 360); g.fillRect(x, 0, 1, H); }
+      var mx = Math.round(l.hue / 360 * W) + 0.5;
+      g.strokeStyle = '#000'; g.strokeRect(mx - 2, 0.5, 4, H - 1);
+      valEl.textContent = 'HUE ' + l.hue + '°';
+    }
+    function setHue(h) {
+      l.hue = h;
+      btn.style.background = layerColour(h);
+      applyUiHue(); draw();
+    }
+    function setFrom(e) {
+      var r = pad.getBoundingClientRect();
+      setHue(Math.round(Math.max(0, Math.min(W - 1, (e.clientX - r.left) * W / r.width)) / W * 360));
+    }
+    var dragging = false;
+    pad.addEventListener('pointerdown', function (e) { pad.setPointerCapture(e.pointerId); dragging = true; setFrom(e); });
+    pad.addEventListener('pointermove', function (e) { if (dragging) setFrom(e); });
+    pad.addEventListener('pointerup', function () { if (dragging) { dragging = false; changed(); } });
+    pop.querySelector('.hue-reset').addEventListener('click', function () { setHue(DEFAULT_HUE); changed(); });
+    document.body.appendChild(pop);
+    var r = btn.getBoundingClientRect();
+    pop.style.left = Math.max(4, Math.min(r.left, window.innerWidth - pop.offsetWidth - 4)) + 'px';
+    pop.style.top = Math.min(r.bottom + 3, window.innerHeight - pop.offsetHeight - 4) + 'px';
+    huePick = { layer: l, el: pop };
+    draw();
+  }
+  function closeHuePicker() { if (huePick) { huePick.el.remove(); huePick = null; } }
+  document.addEventListener('mousedown', function (e) {
+    if (huePick && !huePick.el.contains(e.target) && !e.target.closest('.layer-hue')) closeHuePicker();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeHuePicker(); });
 
   function layerRow(l, i) {
     var row = document.createElement('div');
@@ -1999,9 +2058,19 @@
     lock.className = 'tog' + (l.locked ? '' : ' off');
     lock.textContent = 'L'; lock.title = 'Lock/unlock';
     lock.addEventListener('click', function (e) { e.stopPropagation(); l.locked = !l.locked; renderLayers(); changed(); });
+    var hue = document.createElement('button');
+    hue.className = 'pal-bg layer-hue'; hue.style.background = layerColour(l.hue);
+    hue.title = 'Layer colour: the UI takes this colour while the layer is active';
+    hue.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (huePick && huePick.layer === l) return closeHuePicker();
+      // Picking a colour also switches to the layer, so the change shows straight away.
+      if (S.active !== i) { S.active = i; renderLayers(); requestRender(); }
+      openHuePicker(l, $('layers').querySelector('.layer.active .layer-hue'));
+    });
     var name = document.createElement('span');
     name.className = 'name'; name.textContent = l.name;
-    row.append(eye, lock, name);
+    row.append(eye, lock, hue, name);
     row.addEventListener('click', function (e) {
       S.active = i; renderLayers(); requestRender();
       // The rows are rebuilt on every click, so a double-click is caught here instead of via 'dblclick'.
@@ -2067,7 +2136,7 @@
     if (!src) return;
     structural(function () {
       var l = newLayer(src.name + ' copy');
-      l.cells = src.cells.slice(); l.opacity = src.opacity; l.visible = src.visible;
+      l.cells = src.cells.slice(); l.opacity = src.opacity; l.visible = src.visible; l.hue = src.hue;
       rebuildLayerCanvas(l);
       S.map.layers.splice(S.active + 1, 0, l);
       S.active++;
@@ -2127,7 +2196,7 @@
             if (keyIdx[key] === undefined) { uniq.push(c); keyIdx[key] = uniq.length; }
             data[i] = keyIdx[key];
           }
-          return { id: l.id, name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity, tiles: uniq, data: data };
+          return { id: l.id, name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity, hue: l.hue, tiles: uniq, data: data };
         })
       }
     };
@@ -2152,7 +2221,7 @@
           return o;
         });
         var cells = l.data.map(function (v) { return v ? tiles[v - 1] : null; });
-        return { id: l.id, name: l.name, visible: l.visible !== false, locked: !!l.locked, opacity: l.opacity === undefined ? 1 : l.opacity, cells: cells, dirty: new Set() };
+        return { id: l.id, name: l.name, visible: l.visible !== false, locked: !!l.locked, opacity: l.opacity === undefined ? 1 : l.opacity, hue: typeof l.hue === 'number' ? l.hue : DEFAULT_HUE, cells: cells, dirty: new Set() };
       });
       S.active = Math.min(p.map.active || 0, S.map.layers.length - 1);
       S.stamps = (p.stamps || []).slice(0, MAX_STAMPS).map(function (st) { return { id: uid('s'), w: st.w, h: st.h, cells: st.cells }; });
@@ -2365,7 +2434,7 @@
 
   function exportDialog(mode) {
     var walls = mode === 'walls';
-    if (walls && !S.walls.cells.some(Boolean)) return flash('No walls yet — pick the Wall tool (V) and paint some');
+    if (walls && !S.walls.cells.some(Boolean)) return flash('No walls yet — pick the Wall tool (T) and paint some');
     if (!$('exCustomW').value) $('exCustomW').value = S.map.w * S.ts * 2;
     $('exTitle').textContent = walls ? 'Export walls PNG' : 'Export PNG';
     $('exHiddenRow').hidden = $('exBgRow').hidden = walls;
@@ -2546,12 +2615,13 @@
       if (!spaceDown) { spaceDown = true; if (!drag) canvas.style.cursor = 'grab'; }
       return;
     }
-    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', v: 'wall', b: 'brush', i: 'picker' };
+    var map = { w: 'brush', a: 'eraser', s: 'fill', d: 'rect', f: 'picker', e: 'select', t: 'wall', b: 'brush', i: 'picker' };
     if (map[k]) return setTool(map[k]);
     if (k === 'q') return swapBrush();
     if (k === 'g') return actions.grid();
     if (k === 'x') return actions.axes();
     if (k === 'l' || k === 'r') return actions.dim();
+    if (k === 'c' || k === 'v') return switchLayer(k === 'c' ? 1 : -1);
     if (drag && (e.key === 'Escape' || e.key === 'Delete' || e.key === 'Backspace')) return;
     if (e.key === 'Escape') {
       if (S.marquee) { S.marquee = null; requestRender(); } else setBrush(null);
@@ -2563,11 +2633,14 @@
     if (e.key === '+' || e.key === '=') return stepZoom(1);
     if (e.key === '-') return stepZoom(-1);
     if (e.key === '0') return fitView();
-    if (e.key === '[' || e.key === ']') {
-      S.active = Math.max(0, Math.min(S.map.layers.length - 1, S.active + (e.key === ']' ? 1 : -1)));
-      renderLayers(); requestRender();
-    }
+    if (e.key === '[' || e.key === ']') switchLayer(e.key === ']' ? 1 : -1);
   });
+
+  // +1 is the layer above (higher in the Layers panel), -1 the one below.
+  function switchLayer(dir) {
+    S.active = Math.max(0, Math.min(S.map.layers.length - 1, S.active + dir));
+    renderLayers(); requestRender();
+  }
   document.addEventListener('keyup', function (e) {
     if (e.key === ' ') { spaceDown = false; if (!drag) canvas.style.cursor = ''; }
   });
