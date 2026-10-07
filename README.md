@@ -32,6 +32,8 @@ Open `index.html` in Chrome, Edge or Firefox. That's it.
 | Zoom | Mouse wheel, `+` / `-`, `0` = fit, Ctrl+0 = 100% and centre |
 | Tools | `W` brush, `A` eraser, `S` fill, `D` rect, `F` pick (or Alt+click), `E` select |
 | Previous brush | `Q` |
+| Move the palette selection | Shift+`W` `A` `S` `D` (skips empty tiles) |
+| Clear brush | Shift+Space |
 | Unselect brush / selection | `Esc`, or ✕ next to the palette zoom |
 | Selection | Drag inside to move, `Del` to clear, Ctrl+C to make a stamp |
 | Grid / axes / focus layer | `G` / `X` / `L` |

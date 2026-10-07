@@ -1285,6 +1285,40 @@
     buildBrushFromPalettes();
   }
 
+  // Shift+WASD walks the current palette selection a tile at a time, skipping over empty tiles.
+  function nudgePaletteSel(dx, dy) {
+    var P = S.lastPal && S.tsMap[S.lastPal.tsId] ? S.lastPal : palettes.find(function (q) { return q.sels.length && S.tsMap[q.tsId]; }) || palettes[0];
+    var t = S.tsMap[P.tsId];
+    if (!t) return flash('Load a tileset into the palette first');
+    var cur = P.sels[P.sels.length - 1];
+    if (!cur) {
+      var h = S.palHover && S.palHover.P === P ? S.palHover : { x: 0, y: 0 };
+      cur = { x0: h.x - dx, y0: h.y - dy, x1: h.x - dx, y1: h.y - dy };
+    }
+    var x0 = Math.min(cur.x0, cur.x1), y0 = Math.min(cur.y0, cur.y1);
+    var w = Math.abs(cur.x1 - cur.x0), h2 = Math.abs(cur.y1 - cur.y0);
+    for (var x = x0 + dx, y = y0 + dy; x >= 0 && y >= 0 && x + w < t.palCols && y + h2 < t.palRows; x += dx, y += dy) {
+      var r = { x0: x, y0: y, x1: x + w, y1: y + h2 };
+      if (!rectCells(t, r).cells.some(Boolean)) continue;
+      if (!P.sels.length) palettes.forEach(function (q) { q.sels = []; });
+      P.sels = P.sels.slice(0, -1).concat([r]);
+      S.lastPal = P;
+      buildBrushFromPalettes();
+      if (S.tool !== 'fill' && S.tool !== 'rect') setTool('brush');
+      scrollPaletteTo(P, r);
+      return;
+    }
+  }
+
+  function scrollPaletteTo(P, r) {
+    var d = S.ts * palZoom(P), wrap = P.wrap;
+    var left = r.x0 * d, top = r.y0 * d, right = (r.x1 + 1) * d, bottom = (r.y1 + 1) * d;
+    if (left < wrap.scrollLeft) wrap.scrollLeft = left;
+    else if (right > wrap.scrollLeft + wrap.clientWidth) wrap.scrollLeft = right - wrap.clientWidth;
+    if (top < wrap.scrollTop) wrap.scrollTop = top;
+    else if (bottom > wrap.scrollTop + wrap.clientHeight) wrap.scrollTop = bottom - wrap.clientHeight;
+  }
+
   // ---------------------------------------------------------------------------
   // Hotkeys: Ctrl+letter over a palette tile binds it, Ctrl+letter anywhere else selects it again
   // ---------------------------------------------------------------------------
@@ -2610,6 +2644,11 @@
     if (mod && e.key === '0') { e.preventDefault(); actualSize(); return; }
     if (mod && k === 'c' && S.marquee) { e.preventDefault(); captureStamp(S.marquee); return; }
     if (mod) return;
+    if (e.shiftKey && !e.altKey) {
+      if (e.key === ' ') { e.preventDefault(); return setBrush(null); }
+      var PAL_DIRS = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] };
+      if (PAL_DIRS[k]) { e.preventDefault(); return nudgePaletteSel(PAL_DIRS[k][0], PAL_DIRS[k][1]); }
+    }
     if (e.key === ' ') {
       e.preventDefault();
       if (!spaceDown) { spaceDown = true; if (!drag) canvas.style.cursor = 'grab'; }
